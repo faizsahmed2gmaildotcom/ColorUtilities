@@ -1,0 +1,5 @@
+numpy
+colormath
+pillow
+kmeans
+openpyxl
