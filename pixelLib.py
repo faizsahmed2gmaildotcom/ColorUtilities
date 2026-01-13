@@ -5,7 +5,7 @@ from collections import Counter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 
-DEFAULT_LIGHTNESS = 0
+BRIGHTNESS_FACTOR = 1
 
 
 def normalizeRGB(rgb_code: tuple[float, float, float], factor: float = 1 / 255) -> tuple[float, ...]:
@@ -14,7 +14,7 @@ def normalizeRGB(rgb_code: tuple[float, float, float], factor: float = 1 / 255) 
 
 def rgbToLab(rgb_code: tuple[float, float, float], ignore_lightness=False) -> LabColor:
     lab_color = convert_color(sRGBColor(*normalizeRGB(rgb_code)), LabColor)
-    if ignore_lightness: lab_color.lab_l = DEFAULT_LIGHTNESS
+    if ignore_lightness: lab_color.lab_l *= BRIGHTNESS_FACTOR
     return lab_color
 
 
@@ -55,6 +55,12 @@ def getFrequency(pixels: np.ndarray[Any]) -> list[list[Any]]:
     data = data.tolist()
     occurrences = occurrences.tolist()
     return [[d, o] for d, o in zip(data, occurrences)]
+
+
+def isSignificantlyDifferent(color_1: tuple[int, int, int], color_2: tuple[int, int, int], min_delta_e = 10) -> bool:
+    delta_e = delta_e_cie2000_patched(rgbToLab(color_1), rgbToLab(color_2))
+    print(delta_e)
+    return True if delta_e >= min_delta_e else False
 
 
 def removeWhitePixels(pixels: np.ndarray[Any]) -> np.ndarray[Any]:
@@ -108,14 +114,14 @@ def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fa
     if mode == "CIE2000":
         rgb_color = rgbToLab(rgb_color)
         if color_type == "primary-colors":
-            rgb_color.lab_l = DEFAULT_LIGHTNESS
+            rgb_color.lab_l *= BRIGHTNESS_FACTOR
 
     for i, color_code in enumerate(ALL_COLOR_CODES[mode][color_type]):
         current_dist = colorDist(color_code, rgb_color)
         if current_dist < min_dist:
             min_dist = current_dist
             min_idx = i
-    print(f"{color_type} min_dist: {min_dist}")
+    # print(f"{color_type} min_dist: {min_dist}")
 
     return ALL_COLOR_NAMES[color_type][min_idx]
 
@@ -125,8 +131,7 @@ def blend(pixels: np.ndarray, block_size_x: int, block_size_y: int) -> np.ndarra
     for j in range(len(pixels) // block_size_y):
         blended_pixels.append([])
         for i in range(len(pixels[0]) // block_size_x):
-            block = cropPixels(pixels, j * block_size_y, (j + 1) * block_size_y, i * block_size_x,
-                               (i + 1) * block_size_x)
+            block = cropPixels(pixels, j * block_size_y, (j + 1) * block_size_y, i * block_size_x, (i + 1) * block_size_x)
             sum_colors = np.array([0, 0, 0])
             for row in block:
                 for pixel in row:
