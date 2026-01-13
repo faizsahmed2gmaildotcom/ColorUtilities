@@ -3,3 +3,4 @@ colormath
 pillow
 kmeans
 openpyxl
+requests

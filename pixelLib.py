@@ -12,7 +12,7 @@ def normalizeRGB(rgb_code: tuple[float, float, float], factor: float = 1 / 255) 
     return tuple(rgb * factor for rgb in rgb_code)
 
 
-def convertToLabColor(rgb_code: tuple[float, float, float], ignore_lightness=False) -> LabColor:
+def rgbToLab(rgb_code: tuple[float, float, float], ignore_lightness=False) -> LabColor:
     lab_color = convert_color(sRGBColor(*normalizeRGB(rgb_code)), LabColor)
     if ignore_lightness: lab_color.lab_l = DEFAULT_LIGHTNESS
     return lab_color
@@ -20,8 +20,8 @@ def convertToLabColor(rgb_code: tuple[float, float, float], ignore_lightness=Fal
 
 ALL_COLOR_NAMES = {"fancy-colors": [rgb for rgb in config["fancy-colors"]], "primary-colors": [rgb for rgb in config["primary-colors"]]}
 ALL_COLOR_CODES = {"RGB": {"fancy-colors": [c for c in config["fancy-colors"].values()], "primary-colors": [rgb for rgb in config["primary-colors"].values()]},
-                   "CIE2000": {"fancy-colors": [convertToLabColor(rgb) for rgb in config["fancy-colors"].values()],
-                               "primary-colors": [convertToLabColor(rgb, True) for rgb in config["primary-colors"].values()]}}
+                   "CIE2000": {"fancy-colors": [rgbToLab(rgb) for rgb in config["fancy-colors"].values()],
+                               "primary-colors": [rgbToLab(rgb, True) for rgb in config["primary-colors"].values()]}}
 
 LUM_709 = {'r': 0.2126, 'g': 0.7152, 'b': 0.0722}  # From the Rec. 709 brightness formula
 salient_selection_method = ["top_percent", "zscore"][1]
@@ -40,7 +40,7 @@ def flattenArray(arr: np.ndarray) -> np.ndarray:
 
 def removeDims(list_: list, dim_to_remove: int):
     """
-    # Remove a dimension from a 2D list
+    Removes a dimension from a 2D list
     :param list_: a 2D list
     :param dim_to_remove: dimension to remove from each iterable in arr
     """
@@ -69,8 +69,7 @@ def removeWhitePixels(pixels: np.ndarray[Any]) -> np.ndarray[Any]:
     while pixels[middle_row][color_end_col].sum() == white:
         color_end_col += 1
 
-    return cropPixels(pixels, color_end_row, len(pixels) - 1 - color_end_row, color_end_col,
-                      len(pixels[0]) - 1 - color_end_col)
+    return cropPixels(pixels, color_end_row, len(pixels) - 1 - color_end_row, color_end_col, len(pixels[0]) - 1 - color_end_col)
 
 
 def cropPixels(pixels: np.ndarray, top: int, bottom: int, left: int, right: int) -> np.ndarray:
@@ -93,7 +92,7 @@ def delta_e_cie2000_patched(color1: LabColor, color2: LabColor, Kl=1, Kc=1, Kh=1
     color1_vector = np.array([color1.lab_l, color1.lab_a, color1.lab_b])
     color2_matrix = np.array([(color2.lab_l, color2.lab_a, color2.lab_b)])
     delta_e = delta_e_cie2000(color1_vector, color2_matrix, Kl=Kl, Kc=Kc, Kh=Kh)[0]
-    return delta_e.item()  # Updated asscalar to .item
+    return delta_e.item()  # Updated numpy.asscalar to nparray.item
 
 
 def colorDist(color_1: tuple[float, float, float] | LabColor, color_2: tuple[float, float, float] | LabColor) -> float:
@@ -107,7 +106,7 @@ def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fa
     min_dist = float("inf")
     min_idx = -1
     if mode == "CIE2000":
-        rgb_color = convertToLabColor(rgb_color)
+        rgb_color = rgbToLab(rgb_color)
         if color_type == "primary-colors":
             rgb_color.lab_l = DEFAULT_LIGHTNESS
 

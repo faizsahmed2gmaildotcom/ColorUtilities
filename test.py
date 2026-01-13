@@ -1,20 +1,3 @@
-from time import time
-from typing import Callable, NamedTuple
-import numpy as np
-from random import randint
-
-
-def funcTimer(f: Callable) -> Callable:
-    def decoratedFunc():
-        start = time()
-        f()
-        print(f"Function {f.__name__} took {time() - start}s")
-
-    return decoratedFunc
-
-
-my_set: set = set()
-my_set.update({str(list(map(float, [1, 2, 3])))})
-print(my_set)
-
-print("test col ahn~".replace(" ", "_"))
+my_str = "Caf\xc3\xa9 au lait"
+print(type(my_str))
+print(f"{my_str.encode('utf-8').decode('unicode_escape').encode('latin1').decode('utf-8').encode('latin1').decode('utf-8').replace(' ', '_').lower()} = {67}")
