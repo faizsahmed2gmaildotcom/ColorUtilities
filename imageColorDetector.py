@@ -6,15 +6,15 @@ from PIL import Image
 import os
 
 image_folder_name = "test-images"
-vertical_offset = 80
-horizontal_offset = 80
+vertical_offset = 10
+horizontal_offset = 10
 num_kmeans_centers = 1
 median_filter_size = 5
 salient_pixel_bias = 10
 images_scale_factor = 0.25
 
 
-def getPixelList(path: str, scale: float = images_scale_factor) -> np.ndarray[tuple[int]]:
+def getPixelList(path: str, scale: float = images_scale_factor) -> np.ndarray:
     """
     Returns the list of pixels from an image
     :param scale: Scale the image by this factor to decrease processing times
@@ -47,9 +47,9 @@ if __name__ == "__main__":
         pixels = pL.medianFilter(pixels, median_filter_size)
         pixels = pL.spreadSalientPixels(pixels, salient_pixel_bias)
 
-        cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
+        cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))  # Debug
         flattened_pixels = pL.flattenArray(pixels)
-        cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
+        cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))  # Debug
         cf_img.save(os.path.join("processing-images", img_file_name), format="jpeg")  # Debug
 
         kmeans_result = kmeans(pL.getFrequency(flattened_pixels), num_kmeans_centers)

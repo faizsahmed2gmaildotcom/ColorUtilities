@@ -5,23 +5,20 @@ from collections import Counter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 
-BRIGHTNESS_FACTOR = 1
-
 
 def normalizeRGB(rgb_code: tuple[float, float, float], factor: float = 1 / 255) -> tuple[float, ...]:
     return tuple(rgb * factor for rgb in rgb_code)
 
 
-def rgbToLab(rgb_code: tuple[float, float, float], ignore_lightness=False) -> LabColor:
+def rgbToLab(rgb_code: tuple[float, float, float]) -> LabColor:
     lab_color = convert_color(sRGBColor(*normalizeRGB(rgb_code)), LabColor)
-    if ignore_lightness: lab_color.lab_l *= BRIGHTNESS_FACTOR
     return lab_color
 
 
 ALL_COLOR_NAMES = {"fancy-colors": [rgb for rgb in config["fancy-colors"]], "primary-colors": [rgb for rgb in config["primary-colors"]]}
 ALL_COLOR_CODES = {"RGB": {"fancy-colors": [c for c in config["fancy-colors"].values()], "primary-colors": [rgb for rgb in config["primary-colors"].values()]},
                    "CIE2000": {"fancy-colors": [rgbToLab(rgb) for rgb in config["fancy-colors"].values()],
-                               "primary-colors": [rgbToLab(rgb, True) for rgb in config["primary-colors"].values()]}}
+                               "primary-colors": [rgbToLab(rgb) for rgb in config["primary-colors"].values()]}}
 
 LUM_709 = {'r': 0.2126, 'g': 0.7152, 'b': 0.0722}  # From the Rec. 709 brightness formula
 salient_selection_method = ["top_percent", "zscore"][1]
@@ -48,7 +45,7 @@ def removeDims(list_: list, dim_to_remove: int):
         list_[i] = [list_[i][v] for v in range(len(list_[i])) if v != dim_to_remove]
 
 
-def getFrequency(pixels: np.ndarray[Any]) -> list[list[Any]]:
+def getFrequency(pixels: np.ndarray) -> list[list[Any]]:
     pixels = np.asarray(pixels)
 
     data, occurrences = np.unique(pixels, axis=0, return_counts=True)
@@ -57,22 +54,22 @@ def getFrequency(pixels: np.ndarray[Any]) -> list[list[Any]]:
     return [[d, o] for d, o in zip(data, occurrences)]
 
 
-def isSignificantlyDifferent(color_1: tuple[int, int, int], color_2: tuple[int, int, int], min_delta_e = 10) -> bool:
+def isSignificantlyDifferent(color_1: tuple[int, int, int], color_2: tuple[int, int, int], min_delta_e=10) -> bool:
     delta_e = delta_e_cie2000_patched(rgbToLab(color_1), rgbToLab(color_2))
     print(delta_e)
     return True if delta_e >= min_delta_e else False
 
 
-def removeWhitePixels(pixels: np.ndarray[Any]) -> np.ndarray[Any]:
+def removeWhitePixels(pixels: np.ndarray) -> np.ndarray:
     color_end_row = 0
     color_end_col = 0
     middle_row = len(pixels) // 2
     middle_col = len(pixels[0]) // 2
-    white = 255 * 3
+    white = 255 * 3 - 3  # Tolerance of 3
 
-    while pixels[color_end_row][middle_col].sum() == white:
+    while pixels[color_end_row][middle_col].sum() >= white:
         color_end_row += 1
-    while pixels[middle_row][color_end_col].sum() == white:
+    while pixels[middle_row][color_end_col].sum() >= white:
         color_end_col += 1
 
     return cropPixels(pixels, color_end_row, len(pixels) - 1 - color_end_row, color_end_col, len(pixels[0]) - 1 - color_end_col)
@@ -113,8 +110,6 @@ def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fa
     min_idx = -1
     if mode == "CIE2000":
         rgb_color = rgbToLab(rgb_color)
-        if color_type == "primary-colors":
-            rgb_color.lab_l *= BRIGHTNESS_FACTOR
 
     for i, color_code in enumerate(ALL_COLOR_CODES[mode][color_type]):
         current_dist = colorDist(color_code, rgb_color)
@@ -175,7 +170,7 @@ def spreadSalientPixels(
         zscore_k: float = 1.0,
         weight_lum: float = 0.7,
         weight_sat: float = 0.3,
-) -> Union[list, np.ndarray]:
+) -> np.ndarray:
     """
     Spread brighter/more noticeable pixels to surrounding pixels.
 
@@ -255,11 +250,7 @@ def spreadSalientPixels(
                 out[ny, nx] = src_color
                 assigned_strength[ny, nx] = assign_strength
 
-    # Return same type as input
-    if isinstance(pixels, np.ndarray):
-        return out
-    else:
-        return out.tolist()
+    return out
 
 
 def spreadDominantPixels(
@@ -399,3 +390,4 @@ def enhanceWhitePoint(pixels: np.ndarray) -> np.ndarray:
 
 if __name__ == "__main__":
     print(ALL_COLOR_NAMES, '\n', ALL_COLOR_CODES["CIE2000"])
+    testCV2("test-images/AI-403801_1f.jpg")
