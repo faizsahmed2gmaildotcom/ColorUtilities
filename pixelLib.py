@@ -4,6 +4,7 @@ from math import dist
 from collections import Counter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
+from PIL import Image
 
 
 def normalizeRGB(rgb_code: tuple[float, float, float], factor: float = 1 / 255) -> tuple[float, ...]:
@@ -31,18 +32,8 @@ def insertAndIncrement(dict_: dict[Any, int], key: Any):
         dict_[key] += 1
 
 
-def flattenArray(arr: np.ndarray) -> np.ndarray:
-    return arr.reshape(-1, arr.shape[2])
-
-
-def removeDims(list_: list, dim_to_remove: int):
-    """
-    Removes a dimension from a 2D list
-    :param list_: a 2D list
-    :param dim_to_remove: dimension to remove from each iterable in arr
-    """
-    for i in range(len(list_)):
-        list_[i] = [list_[i][v] for v in range(len(list_[i])) if v != dim_to_remove]
+def flattenArrayOfTuples(arr: np.ndarray) -> np.ndarray:
+    return arr.reshape(-1, arr.shape[-1])
 
 
 def getFrequency(pixels: np.ndarray) -> list[list[Any]]:
@@ -60,7 +51,26 @@ def isSignificantlyDifferent(color_1: tuple[int, int, int], color_2: tuple[int, 
     return True if delta_e >= min_delta_e else False
 
 
-def removeWhitePixels(pixels: np.ndarray) -> np.ndarray:
+def getPixelList(path: str, scale: float = 1) -> np.ndarray:
+    """
+    Returns the list of pixels from an image
+    :param scale: Scale the image by this factor to decrease processing times
+    :param path: Relative path to image
+    :return: List of pixels from the image at path
+    """
+    img = Image.open(path).convert("RGB")
+    if scale != 1:
+        img.thumbnail((img.width * scale, img.height * scale), Image.Resampling.LANCZOS)
+    pixel_data = np.asarray(img)
+    img.close()
+
+    return pixel_data
+
+
+def removeWhiteBackground(pixels: np.ndarray) -> np.ndarray:
+    """
+    Assumes the background is only on the edge of the image, where the image is square.
+    """
     color_end_row = 0
     color_end_col = 0
     middle_row = len(pixels) // 2
@@ -69,8 +79,10 @@ def removeWhitePixels(pixels: np.ndarray) -> np.ndarray:
 
     while pixels[color_end_row][middle_col].sum() >= white:
         color_end_row += 1
+        if color_end_row == (len(pixels) - 1): break
     while pixels[middle_row][color_end_col].sum() >= white:
         color_end_col += 1
+        if color_end_col == (len(pixels[0]) - 1): break
 
     return cropPixels(pixels, color_end_row, len(pixels) - 1 - color_end_row, color_end_col, len(pixels[0]) - 1 - color_end_col)
 
@@ -390,4 +402,3 @@ def enhanceWhitePoint(pixels: np.ndarray) -> np.ndarray:
 
 if __name__ == "__main__":
     print(ALL_COLOR_NAMES, '\n', ALL_COLOR_CODES["CIE2000"])
-    testCV2("test-images/AI-403801_1f.jpg")

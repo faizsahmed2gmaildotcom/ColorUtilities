@@ -1,7 +1,7 @@
+from config import config
 import pixelLib as pL
 import spreadsheetLib as sL
 from kmeans import kmeans
-import numpy as np
 from PIL import Image
 import os
 
@@ -11,46 +11,29 @@ horizontal_offset = 10
 num_kmeans_centers = 1
 median_filter_size = 5
 salient_pixel_bias = 10
-images_scale_factor = 0.25
-
-
-def getPixelList(path: str, scale: float = images_scale_factor) -> np.ndarray:
-    """
-    Returns the list of pixels from an image
-    :param scale: Scale the image by this factor to decrease processing times
-    :param path: Relative path to image
-    :return: List of pixels from the image at path
-    """
-    img = Image.open(path).convert("RGB")
-    if scale != 1:
-        img.thumbnail((img.width * scale, img.height * scale), Image.Resampling.LANCZOS)
-    pixel_data = np.asarray(img)
-    img.close()
-
-    return pixel_data
-
+img_scale_factor = 0.25
 
 if __name__ == "__main__":
     for img_file_name in sorted(os.listdir(image_folder_name)):
         img_name = os.path.splitext(img_file_name)[0]
         print('\n' + img_name)
-        img_name_new = img_name.removesuffix("_1f")
+        img_name_new = img_name.removesuffix(config["general"]["main_image_suffix"])
         if img_name == img_name_new:
             print("Skipping: not main image...")
             continue
         img_name = img_name_new
 
         img_path = os.path.join(image_folder_name, img_file_name)
-        pixels = getPixelList(img_path)
-        pixels = pL.removeWhitePixels(pixels)
+        pixels = pL.getPixelList(img_path, img_scale_factor)
+        pixels = pL.removeWhiteBackground(pixels)
         pixels = pL.cropPixels(pixels, vertical_offset, len(pixels) - 1 - vertical_offset, horizontal_offset, len(pixels[0]) - 1 - horizontal_offset)
         pixels = pL.medianFilter(pixels, median_filter_size)
         pixels = pL.spreadSalientPixels(pixels, salient_pixel_bias)
 
         cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))  # Debug
-        flattened_pixels = pL.flattenArray(pixels)
+        flattened_pixels = pL.flattenArrayOfTuples(pixels)
         cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))  # Debug
-        cf_img.save(os.path.join("processing-images", img_file_name), format="jpeg")  # Debug
+        cf_img.save(os.path.join("processed-images", img_file_name), format="jpeg")  # Debug
 
         kmeans_result = kmeans(pL.getFrequency(flattened_pixels), num_kmeans_centers)
         secondary_kmeans_results = kmeans(pL.getFrequency(flattened_pixels), 2)

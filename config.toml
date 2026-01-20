@@ -1,3 +1,6 @@
+[general]
+main_image_suffix = "_1f"
+
 [spreadsheet-names]
 data = "Sheet1"
 filters = "Filters List"

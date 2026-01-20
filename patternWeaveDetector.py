@@ -1,7 +1,5 @@
 import os
-import cv2
 import numpy as np
-from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, Input, Rescaling, RandomFlip, RandomRotation
@@ -22,16 +20,6 @@ if gpus:
         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
     except RuntimeError as e:
         print(e)
-
-# Image conversion (skip if all images are already JPEG)
-for dir_path, dirs_in_dir, img_paths in os.walk(img_folder_path):
-    for path in img_paths:
-        if path.endswith(".jpg"):
-            out_path = os.path.join(dir_path, path.removesuffix(".jpg") + ".jpeg")
-            Image.open(os.path.join(dir_path, path)).convert("RGB").save(out_path)
-            os.remove(os.path.join(dir_path, path))
-        elif not path.endswith(".jpeg"):
-            os.remove(os.path.join(dir_path, path))
 
 class_names = sorted(os.listdir(img_folder_path))  # Renamed for clarity; assumes subdirs are classes
 
@@ -89,7 +77,7 @@ model.add(MaxPooling2D())
 model.add(Conv2D(32, kernel_size, strides=1, padding='same', activation='relu'))
 model.add(MaxPooling2D())
 model.add(Flatten())
-model.add(Dense(256, activation='relu'))
+model.add(Dense(256, activation='relu'))  # Too many units will cause overfitting
 model.add(Dropout(0.5))  # Add dropout to prevent overfitting
 model.add(Dense(3, activation='softmax'))  # 3 classes
 
@@ -104,7 +92,7 @@ early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logs_dir)
 
 history = model.fit(training_data,
-                    epochs=10,  # Increased; early stopping will halt if needed
+                    epochs=50,
                     validation_data=validation_data,
                     callbacks=[tensorboard_callback, early_stopping])
 
@@ -124,26 +112,24 @@ print(f"Precision: {precision.result().numpy()}\n"
       f"Recall: {recall.result().numpy()}\n"
       f"Accuracy: {cat_accuracy.result().numpy()}")
 
-# Optional: Plot training history
 plt.plot(history.history['accuracy'], label='train_accuracy')
 plt.plot(history.history['val_accuracy'], label='val_accuracy')
 plt.legend()
+plt.show()
 
 
 def preprocessImg(img_path: str):
     img = tf.io.read_file(img_path)
-    img = tf.image.decode_jpeg(img, channels=3)  # or decode_png if needed
+    img = tf.image.decode_jpeg(img, channels=3)
     img = tf.image.resize(img, [256, 256])
-    img = tf.image.rgb_to_grayscale(img)
-    img = img / 255.0
-    img = tf.expand_dims(img, axis=0)  # Batch dimension
+    img = tf.image.rgb_to_grayscale(img) / 255
+    img = tf.expand_dims(img, axis=0)  # Add batch dimension
 
     return img
 
 
-for img_file_name in sorted(os.listdir("processing-images")):
+test_dir_path = os.path.join("test-images")
+for img_file_name in sorted(os.listdir(test_dir_path)):
     img_name = os.path.splitext(img_file_name)[0]
-    test_img_pred: np.ndarray = model.predict(preprocessImg(os.path.join("processing-images", img_file_name)))[0]  # Batch of size 1
-    print(f"{img_name}: {test_img_pred} -> {class_names[np.argmax(test_img_pred)]}\n")
-
-plt.show()
+    test_img_pred: np.ndarray = model.predict(preprocessImg(os.path.join(test_dir_path, img_file_name)))[0]  # Batch of size 1
+    print(f"{img_name}: {test_img_pred} -> {class_names[np.argmax(test_img_pred)]}: {np.max(test_img_pred) * 100:3f}% match\n")

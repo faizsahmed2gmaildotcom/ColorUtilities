@@ -6,3 +6,4 @@ openpyxl
 requests
 opencv-python
 tensorflow
+matplotlib
