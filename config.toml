@@ -1,5 +1,6 @@
 [general]
 main_image_suffix = "_1f"
+debug = 1  # 0: False, 1: True
 
 [spreadsheet-names]
 data = "Sheet1"

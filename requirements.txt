@@ -7,3 +7,4 @@ requests
 opencv-python
 tensorflow
 matplotlib
+pandas

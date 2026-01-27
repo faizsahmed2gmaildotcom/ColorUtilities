@@ -1,3 +1,4 @@
+import os
 from config import *
 import numpy as np
 from math import dist
@@ -47,7 +48,6 @@ def getFrequency(pixels: np.ndarray) -> list[list[Any]]:
 
 def isSignificantlyDifferent(color_1: tuple[int, int, int], color_2: tuple[int, int, int], min_delta_e=10) -> bool:
     delta_e = delta_e_cie2000_patched(rgbToLab(color_1), rgbToLab(color_2))
-    print(delta_e)
     return True if delta_e >= min_delta_e else False
 
 
@@ -77,10 +77,10 @@ def removeWhiteBackground(pixels: np.ndarray) -> np.ndarray:
     middle_col = len(pixels[0]) // 2
     white = 255 * 3 - 3  # Tolerance of 3
 
-    while pixels[color_end_row][middle_col].sum() >= white:
+    while (pixels[color_end_row][middle_col].sum() >= white) and (pixels[color_end_row // 2][middle_col // 2].sum() >= white):
         color_end_row += 1
         if color_end_row == (len(pixels) - 1): break
-    while pixels[middle_row][color_end_col].sum() >= white:
+    while (pixels[middle_row][color_end_col].sum() >= white) and (pixels[middle_row // 2][color_end_col // 2].sum() >= white):
         color_end_col += 1
         if color_end_col == (len(pixels[0]) - 1): break
 
@@ -128,7 +128,7 @@ def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fa
         if current_dist < min_dist:
             min_dist = current_dist
             min_idx = i
-    # print(f"{color_type} min_dist: {min_dist}")
+    if debug: print(f"Closest color: {color_type} at dist {min_dist}")
 
     return ALL_COLOR_NAMES[color_type][min_idx]
 
@@ -154,7 +154,7 @@ def medianFilter(pixels: np.ndarray, window_size: int) -> np.ndarray:
     if window_size == 1:
         return pixels
     if (window_size % 2) == 0:
-        raise ValueError("window_size must be odd")
+        raise ValueError("window_size must be odd!")
 
     processed_pixels = np.zeros(pixels.shape, dtype=int)
     for j in range(pixels.shape[0]):
@@ -384,8 +384,7 @@ def enhanceWhitePoint(pixels: np.ndarray) -> np.ndarray:
     print("Enhancing white point...")
     pixels_float = pixels.astype(float)
 
-    luminance = LUM_709['r'] * pixels_float[:, :, 0] + LUM_709['g'] * pixels_float[:, :, 1] + LUM_709['b'] * \
-                pixels_float[:, :, 2]
+    luminance = LUM_709['r'] * pixels_float[:, :, 0] + LUM_709['g'] * pixels_float[:, :, 1] + LUM_709['b'] * pixels_float[:, :, 2]
 
     # Bias to enhance bright pixels only
     lum_norm = luminance / 255.0
@@ -398,6 +397,60 @@ def enhanceWhitePoint(pixels: np.ndarray) -> np.ndarray:
     enhanced_pixels = np.clip(enhanced_pixels, 0, 255).astype(np.uint8)
 
     return enhanced_pixels
+
+
+def convertToJPEG(img_path: str) -> str:
+    path, ext = os.path.splitext(img_path)
+    if ext == ".jpeg": return img_path
+    pixels = getPixelList(img_path)
+    cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
+    flattened_pixels = flattenArrayOfTuples(pixels)
+    cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
+    cf_img.save(path + ".jpeg", format="jpeg")
+    cf_img.close()
+    if debug: print(f"Converted {img_path} to JPEG")
+    os.remove(img_path)
+    return path + ".jpeg"
+
+
+def preprocessImage(src_path: str, out_path: str = ""):
+    src_path = convertToJPEG(src_path)
+    if out_path == "": out_path = src_path
+
+    if not hasWhiteBackground(src_path): return
+
+    pixels = getPixelList(src_path)
+    pixels = removeWhiteBackground(pixels)
+    pixels = cropPixels(pixels, 10, len(pixels) - 10, 20, len(pixels[0]) - 20)
+    cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
+    flattened_pixels = flattenArrayOfTuples(pixels)
+    if flattened_pixels.shape[0] == 0: return
+    cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
+    cf_img.save(out_path, format="jpeg")
+    cf_img.close()
+    if out_path != src_path: os.remove(src_path)
+    if debug: print(f"Processed: {out_path}")
+
+
+def hasWhiteBackground(img_path: str) -> bool:
+    img_obj = Image.open(img_path)
+    img_obj_cropped = img_obj.crop((0, 0, 1, 1))
+    img_obj.close()
+    first_pixel = np.asarray(img_obj_cropped.getdata())[0]
+    img_obj_cropped.close()
+    return first_pixel.sum() == (255 * 3)
+
+
+def cropImage(img_path: str, box: tuple[float | None, float | None, float | None, float | None]):
+    img_obj = Image.open(img_path)
+    new_box = ((0 if box[0] is None else box[0]), (0 if box[1] is None else box[1]),
+               (img_obj.width if box[2] is None else box[2]), (img_obj.height if box[3] is None else box[3]))
+
+    img_obj_cropped = img_obj.crop(new_box)
+    img_obj.close()
+    img_obj_cropped.save(img_path, format="jpeg")
+    img_obj_cropped.close()
+    if debug: print(f"Cropped {img_path}: {img_obj.width}x{img_obj.height} -> {img_obj_cropped.width}x{img_obj_cropped.height}")
 
 
 if __name__ == "__main__":

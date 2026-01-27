@@ -19,6 +19,10 @@ def getColNames(sheet=data_sheet) -> list[str]:
     return [n.value for n in next(sheet.iter_rows(1, 1))[:getNumCols(sheet)]]
 
 
+def getCol(col: int, sheet=data_sheet) -> list[str]:
+    return [n.value for n in next(sheet.iter_cols(col, col))]
+
+
 num_cols = getNumCols()
 col_names = {c_n.replace(" ", "_"): i for i, c_n in enumerate(getColNames())}
 data_sheet.delete_cols(num_cols + 2, 2 ** 31)
