@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing import image_dataset_from_directory
-from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.applications import EfficientNetB7
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 
 # Define key parameters
@@ -138,13 +138,15 @@ data_augmentation = models.Sequential([
 
 # show_augmented_examples(train_ds, data_augmentation)
 
-# Use transfer learning with EfficientNetB0 for high accuracy on image classification
-base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=(*processed_img_size, 3))
+# Use transfer learning with EfficientNet for high accuracy on image classification
+base_model = EfficientNetB7(weights='imagenet', include_top=False, input_shape=(*processed_img_size, 3))
 base_model.trainable = True  # Freeze base layers initially; can be set to True for fine-tuning later
+resize_layer = layers.Resizing(*processed_img_size, interpolation='bilinear')
 
 # Build the model
 model = models.Sequential([
     data_augmentation,
+    resize_layer,
     base_model,
     layers.GlobalAveragePooling2D(),
     layers.Dense(512, activation='relu'),
