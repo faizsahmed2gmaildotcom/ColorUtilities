@@ -2,7 +2,9 @@ import os
 import numpy as np
 from pixelLib import preprocessImage
 from PIL import Image
+from config import *
 
+processed_img_size: tuple[int, int] = config["general"]["cropped_img_size"]
 class_names = sorted(os.listdir("training-data"))  # Renamed for clarity; assumes subdirs are classes
 
 for img_file_name in sorted(os.listdir("test-images")):
@@ -29,8 +31,9 @@ import tensorflow as tf
 def preprocessInputImage(img_path: str):
     img = tf.io.read_file(img_path)
     img = tf.image.decode_jpeg(img, channels=3)
-    img = tf.image.resize(img, [224, 224])
+    # img = tf.image.resize(img, processed_img_size)
     # img = tf.image.rgb_to_grayscale(img) / 255
+    img = tf.image.random_crop(img, processed_img_size)
     img = tf.expand_dims(img, axis=0)  # Add batch dimension
 
     return img
@@ -42,16 +45,16 @@ def preprocessInputImageGrok(img_path: str) -> np.ndarray:
 
     The function performs the exact same preprocessing steps used during training:
     - Loads the image
-    - Resizes to 224×224 (matching the model's input shape)
+    - Resizes to specified dimensions
     - Converts to RGB (in case of any unusual modes)
     - Normalizes pixel values using EfficientNet preprocessing
-    - Adds batch dimension (shape becomes (1, 224, 224, 3))
+    - Adds batch dimension
 
     Args:
         img_path (str): Path to the input JPEG image file
 
     Returns:
-        np.ndarray: Preprocessed image ready for model.predict() with shape (1, 224, 224, 3)
+        np.ndarray: Preprocessed image ready for model.predict()
     """
     if not os.path.isfile(img_path):
         raise FileNotFoundError(f"Image file not found: {img_path}")
@@ -60,7 +63,7 @@ def preprocessInputImageGrok(img_path: str) -> np.ndarray:
     img = Image.open(img_path).convert('RGB')
 
     # Resize to the exact dimensions used during training
-    img = img.resize((224, 224), Image.Resampling.LANCZOS)
+    img = img.resize(processed_img_size, Image.Resampling.LANCZOS)
 
     # Convert PIL image to numpy array
     img_array = np.array(img, dtype=np.float32)
@@ -69,7 +72,7 @@ def preprocessInputImageGrok(img_path: str) -> np.ndarray:
     # This scales pixels to [-1, 1] range (mean & std used in EfficientNet)
     img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
 
-    # Add batch dimension → shape (1, 224, 224, 3)
+    # Add batch dimension
     img_array = np.expand_dims(img_array, axis=0)
 
     img.close()

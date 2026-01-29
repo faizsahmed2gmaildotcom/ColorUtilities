@@ -1,7 +1,7 @@
 import os
 from time import time
 from config import config
-from pixelLib import preprocessImage, cropImage
+from pixelLib import preprocessImage
 import pandas as pd
 
 DIVIJ_DATASET = False

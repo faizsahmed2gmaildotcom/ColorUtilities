@@ -1,27 +1,30 @@
-from tensorflow.keras import layers, models
-from tensorflow.keras.preprocessing import image_dataset_from_directory
-from tensorflow.keras.applications import EfficientNetB0
-from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
+from config import *
 import os
 import datetime
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
+from tensorflow.keras import layers, models
+from tensorflow.keras.preprocessing import image_dataset_from_directory
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 
 # Define key parameters
-train_dir = 'training-data'  # Directory containing subdirectories for each pattern class
-img_dim = (1024, 1024)
-batch_size = 32  # Batch size for training
-epochs = 20  # Number of training epochs (adjust based on convergence)
-validation_split = 0.2  # Fraction of data to use for validation
+train_dir = 'training-data'
+img_size: tuple[int, int] = config["general"]["img_size"]
+processed_img_size: tuple[int, int] = config["general"]["cropped_img_size"]
+batch_size = 8
+epochs = 67
+validation_split = 0.2
+learning_rate = 0.0001
 
 
 def show_augmented_examples(
         dataset,
         augmentation: tf.keras.Sequential,
         n_examples_per_class: int = 4,
-        dpi: int = 350,
-        pause_between_figures: float = 0.6
+        dpi: int = 300,
+        pause_between_figures: float = 2.0
 ) -> None:
     """
     Displays each original image and its augmented version in a separate figure,
@@ -37,7 +40,6 @@ def show_augmented_examples(
     _class_names = dataset.class_names
     seen_counts = {cls_name: 0 for cls_name in _class_names}
 
-    # We process the dataset sequentially and display immediately
     for images_batch, labels_batch in dataset:
         for img_tensor, label_tensor in zip(images_batch, labels_batch):
             class_idx = int(label_tensor.numpy())
@@ -85,8 +87,8 @@ def show_augmented_examples(
                 bbox = ax.get_position()
                 ax.set_position([
                     bbox.x0, bbox.y0,
-                    img_dim[1] / dpi / fig.get_figwidth(),
-                    img_dim[0] / dpi / fig.get_figheight()
+                    img_size[1] / dpi / fig.get_figwidth(),
+                    img_size[0] / dpi / fig.get_figheight()
                 ])
 
             plt.draw()
@@ -104,7 +106,7 @@ train_ds = image_dataset_from_directory(
     validation_split=validation_split,
     subset="training",
     seed=123,
-    image_size=img_dim,
+    image_size=img_size,
     batch_size=batch_size,
     label_mode='int'  # Integer labels for multi-class classification
 )
@@ -114,7 +116,7 @@ val_ds = image_dataset_from_directory(
     validation_split=validation_split,
     subset="validation",
     seed=123,
-    image_size=img_dim,
+    image_size=img_size,
     batch_size=batch_size,
     label_mode='int'
 )
@@ -127,17 +129,17 @@ print(f"Class names: {class_names}")
 
 # Apply data augmentation to improve generalization and accuracy
 data_augmentation = models.Sequential([
+    layers.RandomCrop(*processed_img_size),
     layers.RandomFlip("horizontal_and_vertical"),
     layers.RandomZoom(0.2),
-    layers.GaussianNoise(0.5),
     layers.RandomRotation(0.01),
-    layers.RandomContrast(0.5)
+    layers.RandomContrast(0.5),
 ])
 
 # show_augmented_examples(train_ds, data_augmentation)
 
 # Use transfer learning with EfficientNetB0 for high accuracy on image classification
-base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=(*img_dim, 3))
+base_model = EfficientNetB0(weights='imagenet', include_top=False, input_shape=(*processed_img_size, 3))
 base_model.trainable = True  # Freeze base layers initially; can be set to True for fine-tuning later
 
 # Build the model
@@ -152,10 +154,11 @@ model = models.Sequential([
 
 # Compile the model
 model.compile(
-    optimizer='adam',
+    optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
     loss='sparse_categorical_crossentropy',
     metrics=['accuracy']
 )
+model.build(input_shape=(None, *processed_img_size, 3))
 
 # Display model summary
 model.summary()

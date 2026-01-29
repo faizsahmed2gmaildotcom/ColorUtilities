@@ -1,6 +1,8 @@
 [general]
 main_image_suffix = "_1f"
 debug = 1  # 0: False, 1: True
+img_size = [1400, 1400]
+cropped_img_size = [512, 512]  # [height, width]
 
 [spreadsheet-names]
 data = "Sheet1"

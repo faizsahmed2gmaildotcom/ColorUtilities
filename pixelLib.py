@@ -413,7 +413,7 @@ def convertToJPEG(img_path: str) -> str:
     return path + ".jpeg"
 
 
-def preprocessImage(src_path: str, out_path: str = ""):
+def preprocessImage(src_path: str, out_path: str = "") -> None:
     src_path = convertToJPEG(src_path)
     if out_path == "": out_path = src_path
 
@@ -438,7 +438,7 @@ def hasWhiteBackground(img_path: str) -> bool:
     img_obj.close()
     first_pixel = np.asarray(img_obj_cropped.getdata())[0]
     img_obj_cropped.close()
-    return first_pixel.sum() == (255 * 3)
+    return first_pixel.sum() >= (254 * 3)
 
 
 def cropImage(img_path: str, box: tuple[float | None, float | None, float | None, float | None]):
