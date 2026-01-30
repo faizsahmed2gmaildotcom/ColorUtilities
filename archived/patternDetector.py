@@ -5,7 +5,7 @@ from PIL import Image
 from config import *
 
 processed_img_size: tuple[int, int] = config["general"]["cropped_img_size"]
-class_names = sorted(os.listdir("training-data"))  # Renamed for clarity; assumes subdirs are classes
+class_names = sorted(os.listdir("training-data"))
 
 for img_file_name in sorted(os.listdir("test-images")):
     preprocessImage(os.path.join("test-images", img_file_name))

@@ -1,12 +1,12 @@
 import os
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, Input, RandomFlip, RandomZoom, RandomCrop
+import tensorflow.keras.layers as layers
 from tensorflow.keras.metrics import Precision, Recall
 import matplotlib.pyplot as plt
 from config import *
 
-batch_size = 8
+batch_size = 1
 training_data_path = "training-data"
 logs_dir = "logs"
 img_size: tuple[int, int] = config["general"]["img_size"]
@@ -31,9 +31,11 @@ img_data = tf.keras.utils.image_dataset_from_directory(
 
 # Data augmentation layers (applied to training data only)
 data_augmentation = Sequential([
-    RandomFlip("horizontal_and_vertical"),
-    RandomZoom(0.2),
-    RandomCrop(*processed_img_size),
+    layers.RandomFlip("horizontal_and_vertical"),
+    layers.RandomZoom(0.2),
+    layers.RandomRotation(0.01),
+    layers.RandomContrast(0.5),
+    layers.RandomCrop(*processed_img_size),
 ])
 
 
@@ -65,20 +67,20 @@ kernel_size = (3, 3)
 
 model = Sequential()
 
-model.add(Input(shape=(*processed_img_size, 1)))
+model.add(layers.Input(shape=(*processed_img_size, 1)))
 
-model.add(Conv2D(32, kernel_size, strides=1, padding='same', activation='relu'))
-model.add(MaxPooling2D())
-model.add(Conv2D(64, kernel_size, strides=1, padding='same', activation='relu'))
-model.add(MaxPooling2D())
-model.add(Conv2D(128, kernel_size, strides=1, padding='same', activation='relu'))
-model.add(MaxPooling2D())
-model.add(Conv2D(256, kernel_size, strides=1, padding='same', activation='relu'))
-model.add(MaxPooling2D())
-model.add(Flatten())
-model.add(Dense(512, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(len(os.listdir("training-data")), activation='softmax'))
+model.add(layers.Conv2D(32, kernel_size, strides=1, padding='same', activation='relu'))
+model.add(layers.MaxPooling2D())
+model.add(layers.Conv2D(64, kernel_size, strides=1, padding='same', activation='relu'))
+model.add(layers.MaxPooling2D())
+model.add(layers.Conv2D(128, kernel_size, strides=1, padding='same', activation='relu'))
+model.add(layers.MaxPooling2D())
+model.add(layers.Conv2D(256, kernel_size, strides=1, padding='same', activation='relu'))
+model.add(layers.MaxPooling2D())
+model.add(layers.Flatten())
+model.add(layers.Dense(512, activation='relu'))
+model.add(layers.Dropout(0.5))
+model.add(layers.Dense(len(os.listdir("training-data")), activation='softmax'))
 
 model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
               loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),

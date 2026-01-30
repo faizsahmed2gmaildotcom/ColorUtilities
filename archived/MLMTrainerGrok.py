@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing import image_dataset_from_directory
-from tensorflow.keras.applications import EfficientNetB7
+import tensorflow.keras.applications as tfa
 from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 
 # Define key parameters
@@ -14,17 +14,25 @@ train_dir = 'training-data'
 img_size: tuple[int, int] = config["general"]["img_size"]
 processed_img_size: tuple[int, int] = config["general"]["cropped_img_size"]
 batch_size = 8
-epochs = 67
+epochs = 100
 validation_split = 0.2
 learning_rate = 0.0001
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        print(e)
 
 
 def show_augmented_examples(
         dataset,
         augmentation: tf.keras.Sequential,
         n_examples_per_class: int = 4,
-        dpi: int = 300,
-        pause_between_figures: float = 2.0
+        dpi: int = 450
 ) -> None:
     """
     Displays each original image and its augmented version in a separate figure,
@@ -35,7 +43,6 @@ def show_augmented_examples(
         augmentation: The data augmentation layer (tf.keras.Sequential)
         n_examples_per_class: Max number of examples to show per class
         dpi: Screen DPI (affects perceived size)
-        pause_between_figures: Time (seconds) to pause between showing figures
     """
     _class_names = dataset.class_names
     seen_counts = {cls_name: 0 for cls_name in _class_names}
@@ -92,7 +99,7 @@ def show_augmented_examples(
                 ])
 
             plt.draw()
-            plt.pause(pause_between_figures)  # Let user see this pair
+            plt.pause(5)  # Let user see this pair
 
             # Close figure to free memory (important when showing many)
             plt.close(fig)
@@ -103,6 +110,7 @@ def show_augmented_examples(
 # Load the dataset from the directory, splitting into training and validation sets
 train_ds = image_dataset_from_directory(
     train_dir,
+    interpolation='lanczos5',
     validation_split=validation_split,
     subset="training",
     seed=123,
@@ -113,6 +121,7 @@ train_ds = image_dataset_from_directory(
 
 val_ds = image_dataset_from_directory(
     train_dir,
+    interpolation='lanczos5',
     validation_split=validation_split,
     subset="validation",
     seed=123,
@@ -129,17 +138,17 @@ print(f"Class names: {class_names}")
 
 # Apply data augmentation to improve generalization and accuracy
 data_augmentation = models.Sequential([
-    layers.RandomCrop(*processed_img_size),
     layers.RandomFlip("horizontal_and_vertical"),
     layers.RandomZoom(0.2),
     layers.RandomRotation(0.01),
     layers.RandomContrast(0.5),
+    layers.RandomCrop(*processed_img_size),
 ])
 
 # show_augmented_examples(train_ds, data_augmentation)
 
 # Use transfer learning with EfficientNet for high accuracy on image classification
-base_model = EfficientNetB7(weights='imagenet', include_top=False, input_shape=(*processed_img_size, 3))
+base_model = tfa.EfficientNetB0(weights='imagenet', include_top=False, input_shape=(*processed_img_size, 3))
 base_model.trainable = True  # Freeze base layers initially; can be set to True for fine-tuning later
 resize_layer = layers.Resizing(*processed_img_size, interpolation='bilinear')
 

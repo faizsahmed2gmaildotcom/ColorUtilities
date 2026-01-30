@@ -8,3 +8,5 @@ opencv-python
 tensorflow
 matplotlib
 pandas
+torch
+torchvision
