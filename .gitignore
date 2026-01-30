@@ -1,0 +1,10 @@
+*.jpg
+*.jpeg
+*.png
+result.xlsx
+*test*.py
+Divij.com
+logs/**
+training-data*/**
+processed-images/**
+MLMs/**
