@@ -1,12 +1,12 @@
 import os
 import torch
 from PIL import Image
-from MLMTrainerPyTorch import ModelClassifier, val_transform
+from MLMTrainerPyTorch import ConvnextModelClassifier, val_transform, train_transform
+from config import *
 
 # ────────────────────────────────────────────────
 #  Configuration (should match your training script)
 # ────────────────────────────────────────────────
-from config import *
 
 # Paths
 MODEL_PATH = os.path.join("MLMs", "best_model.pt")  # or "final_model.pt"
@@ -15,13 +15,13 @@ class_names = sorted(os.listdir("training-data"))
 img_size = config["general"]["img_size"]
 processed_img_size = config["general"]["cropped_img_size"]
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cpu")
 print(f"Using device: {DEVICE}")
 
 # ────────────────────────────────────────────────
 #  Load model and weights
 # ────────────────────────────────────────────────
-model = ModelClassifier(num_classes=len(class_names)).to(DEVICE)
+model = ConvnextModelClassifier(len(class_names)).to(DEVICE)
 model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
 model.eval()
 

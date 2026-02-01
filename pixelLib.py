@@ -23,7 +23,7 @@ ALL_COLOR_CODES = {"RGB": {"fancy-colors": [c for c in config["fancy-colors"].va
                                "primary-colors": [rgbToLab(rgb) for rgb in config["primary-colors"].values()]}}
 
 LUM_709 = {'r': 0.2126, 'g': 0.7152, 'b': 0.0722}  # From the Rec. 709 brightness formula
-salient_selection_method = ["top_percent", "zscore"][1]
+salient_selection_method: Literal["top-percent", "zscore"] = "zscore"
 
 
 def insertAndIncrement(dict_: dict[Any, int], key: Any):
