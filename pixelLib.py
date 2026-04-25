@@ -1,11 +1,27 @@
 import os
+
 from config import *
 import numpy as np
 from math import dist
 from collections import Counter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
+from typing import Callable
+
+
+def catch_error(f: Callable) -> Callable:
+    def decoratedFunc(*args, **kwargs):
+        try:
+            f(*args, **kwargs)
+        except UnidentifiedImageError:
+            print("!!!WARNING: Unable to process image!!!")
+            f(*args, **kwargs, error_code=UnidentifiedImageError)
+        except IndexError:
+            print("!!!WARNING: Unable to process image!!!")
+            f(*args, **kwargs, error_code=IndexError)
+
+    return decoratedFunc
 
 
 def normalizeRGB(rgb_code: tuple[float, float, float], factor: float = 1 / 255) -> tuple[float, ...]:
@@ -399,21 +415,26 @@ def enhanceWhitePoint(pixels: np.ndarray) -> np.ndarray:
     return enhanced_pixels
 
 
-def convertToJPEG(img_path: str) -> str:
-    path, ext = os.path.splitext(img_path)
-    if ext == ".jpeg": return img_path
-    pixels = getPixelList(img_path)
-    cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
-    flattened_pixels = flattenArrayOfTuples(pixels)
-    cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
-    cf_img.save(path + ".jpeg", format="jpeg")
-    cf_img.close()
-    if debug: print(f"Converted {img_path} to JPEG")
-    os.remove(img_path)
+def convertToJPEG(src_path: str) -> str:
+    path, ext = os.path.splitext(src_path)
+    if ext == ".jpeg": return src_path
+    with Image.open(src_path) as new_img:
+        if new_img.mode != 'RGB':
+            new_img = new_img.convert('RGB')
+        new_img.save(path + ".jpeg", format='jpeg')
+    if debug: print(f"Converted {src_path} to JPEG")
+    os.remove(src_path)
     return path + ".jpeg"
 
 
-def preprocessImage(src_path: str, out_path: str = "") -> None:
+@catch_error
+def preprocessImage(src_path: str, out_path: str = "", error_code: OSError = None) -> None:
+    if error_code:
+        if os.path.exists(src_path):
+            os.remove(src_path)
+        print(f"Deleted {src_path} with {error_code}")
+        return
+
     src_path = convertToJPEG(src_path)
     if out_path == "": out_path = src_path
 
@@ -422,22 +443,20 @@ def preprocessImage(src_path: str, out_path: str = "") -> None:
     pixels = getPixelList(src_path)
     pixels = removeWhiteBackground(pixels)
     pixels = cropPixels(pixels, 10, len(pixels) - 10, 20, len(pixels[0]) - 20)
-    cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
+    new_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
     flattened_pixels = flattenArrayOfTuples(pixels)
     if flattened_pixels.shape[0] == 0: return
-    cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
-    cf_img.save(out_path, format="jpeg")
-    cf_img.close()
+    new_img.putdata(list(map(tuple, flattened_pixels.tolist())))
+    new_img.save(out_path, format="jpeg")
+    new_img.close()
     if out_path != src_path: os.remove(src_path)
     if debug: print(f"Processed: {out_path}")
 
 
 def hasWhiteBackground(img_path: str) -> bool:
-    img_obj = Image.open(img_path)
-    img_obj_cropped = img_obj.crop((0, 0, 1, 1))
-    img_obj.close()
-    first_pixel = np.asarray(img_obj_cropped.getdata())[0]
-    img_obj_cropped.close()
+    cropped_img = Image.open(img_path).crop((0, 0, 1, 1))
+    first_pixel = np.asarray(cropped_img.getdata())[0]
+    cropped_img.close()
     return first_pixel.sum() >= (254 * 3)
 
 
@@ -445,10 +464,11 @@ def cropImage(img_path: str, box: tuple[float | None, float | None, float | None
     img_obj = Image.open(img_path)
     new_box = ((0 if box[0] is None else box[0]), (0 if box[1] is None else box[1]),
                (img_obj.width if box[2] is None else box[2]), (img_obj.height if box[3] is None else box[3]))
-
     img_obj_cropped = img_obj.crop(new_box)
     img_obj.close()
-    img_obj_cropped.save(img_path, format="jpeg")
+
+    img_format: str = os.path.splitext(img_path)[-1][1:].lower()
+    img_obj_cropped.save(img_path, format=img_format)
     img_obj_cropped.close()
     if debug: print(f"Cropped {img_path}: {img_obj.width}x{img_obj.height} -> {img_obj_cropped.width}x{img_obj_cropped.height}")
 

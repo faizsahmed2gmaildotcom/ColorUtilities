@@ -10,17 +10,18 @@ import random
 train_dir = 'training-data'
 img_size = config["general"]["img_size"]  # original loaded size
 processed_img_size = config["general"]["cropped_img_size"]  # after crop / final model input
-batch_size = 3
-epochs = 100
+batch_size = 1
+epochs = 50
 validation_split = 0.2
-learning_rate = 0.0001
+learning_rate = 1e-5
+grayscale = True
 
 
 # ────────────────────────────────────────────────
 #  Model - ConvNeXt
 # ────────────────────────────────────────────────
 class ConvnextModelClassifier(nn.Module):
-    def __init__(self, num_classes: int):
+    def __init__(self, _num_classes: int):
         super().__init__()
         self.base = models.convnext_base(weights=models.ConvNeXt_Base_Weights.DEFAULT)
         in_features = self.base.classifier[2].in_features
@@ -31,7 +32,7 @@ class ConvnextModelClassifier(nn.Module):
             nn.Linear(in_features, 512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
-            nn.Linear(512, num_classes)
+            nn.Linear(512, _num_classes)
         )
 
     def forward(self, x):
@@ -47,8 +48,8 @@ train_transform = transforms.Compose([
     transforms.ColorJitter(contrast=0.5),
     transforms.RandomRotation(degrees=3.6),
     transforms.Resize(img_size, interpolation=transforms.InterpolationMode.LANCZOS),  # First resize to square
-    transforms.RandomResizedCrop(size=processed_img_size, interpolation=transforms.InterpolationMode.BILINEAR),  # Then random crop
-    transforms.RandomGrayscale(1),
+    transforms.RandomResizedCrop(size=processed_img_size, interpolation=transforms.InterpolationMode.BILINEAR, scale=(0.8, 1)),  # Then random crop
+    transforms.RandomGrayscale(1 if grayscale else 0),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
@@ -57,7 +58,7 @@ train_transform = transforms.Compose([
 val_transform = transforms.Compose([
     transforms.Resize(img_size, interpolation=transforms.InterpolationMode.LANCZOS),
     transforms.CenterCrop(processed_img_size),
-    transforms.RandomGrayscale(1),
+    transforms.RandomGrayscale(1 if grayscale else 0),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
@@ -145,7 +146,6 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader, random_split, Subset
     from torchvision import datasets
 
-    # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     if torch.cuda.is_available():
@@ -284,12 +284,12 @@ if __name__ == '__main__':
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(),
-                       os.path.join(checkpoint_dir, "best_model.pt"))
+                       os.path.join(checkpoint_dir, f"best_model{"_grayscale" if grayscale else ""}.pt"))
             print("  → Saved new best model")
 
     # Final save & plotting (unchanged)
     torch.save(model.state_dict(),
-               os.path.join(checkpoint_dir, "final_model.pt"))
+               os.path.join(checkpoint_dir, f"final_model{"_grayscale" if grayscale else ""}.pt"))
 
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)

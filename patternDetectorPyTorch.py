@@ -9,7 +9,7 @@ from config import *
 # ────────────────────────────────────────────────
 
 # Paths
-MODEL_PATH = os.path.join("MLMs", "best_model.pt")  # or "final_model.pt"
+MODEL_PATH = os.path.join("MLMs", "best_model_grayscale.pt")  # or "final_model.pt"
 TEST_DIR = "test-images"
 class_names = sorted(os.listdir("training-data"))
 img_size = config["general"]["img_size"]
