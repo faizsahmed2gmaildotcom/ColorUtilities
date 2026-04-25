@@ -3,14 +3,22 @@ from torchvision import transforms, models
 import torch.nn as nn
 from PIL import Image
 import random
+import os
+import datetime
+import matplotlib.pyplot as plt
+import torch
+import torch.optim as optim
+from torch.utils.data import DataLoader, random_split, Subset
+from torchvision import datasets
 
 # ────────────────────────────────────────────────
 #  Key parameters (same as original)
 # ────────────────────────────────────────────────
-train_dir = 'training-data'
+l1_training_dir = "training-data/level-1"
+l2_training_dir = "training-data/level-2"
 img_size = config["general"]["img_size"]  # original loaded size
 processed_img_size = config["general"]["cropped_img_size"]  # after crop / final model input
-batch_size = 1
+batch_size = 8
 epochs = 50
 validation_split = 0.2
 learning_rate = 1e-5
@@ -137,26 +145,12 @@ def visualize_transform_samples(data_dir, transform, num_samples=6):
     plt.show()
 
 
-if __name__ == '__main__':
-    import os
-    import datetime
-    import matplotlib.pyplot as plt
-    import torch
-    import torch.optim as optim
-    from torch.utils.data import DataLoader, random_split, Subset
-    from torchvision import datasets
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-    if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
-        torch.backends.cudnn.benchmark = True
-
+def train(model_name: str, training_dir: str, plot = False):
     # ────────────────────────────────────────────────
     #  Dataset loading & split
     # ────────────────────────────────────────────────
     base_dataset = datasets.ImageFolder(
-        train_dir,
+        training_dir,
         transform=transforms.ToTensor()
     )
 
@@ -201,6 +195,7 @@ if __name__ == '__main__':
     # ────────────────────────────────────────────────
     class_names = sorted(base_dataset.classes)
     num_classes = len(class_names)
+    model_name = f"{model_name}_{num_classes}.pt"
     print(f"Number of classes: {num_classes}")
     print(f"Class names: {class_names}")
 
@@ -225,7 +220,7 @@ if __name__ == '__main__':
     # ────────────────────────────────────────────────
     if config['general']['debug']:
         print("Showing sample images before/after train_transform...")
-        visualize_transform_samples(train_dir, train_transform, num_samples=6)
+        visualize_transform_samples(training_dir, train_transform, num_samples=6)
 
     # ────────────────────────────────────────────────
     #  Training loop
@@ -284,33 +279,48 @@ if __name__ == '__main__':
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(),
-                       os.path.join(checkpoint_dir, f"best_model{"_grayscale" if grayscale else ""}.pt"))
+                       os.path.join(checkpoint_dir, model_name))
             print("  → Saved new best model")
 
     # Final save & plotting (unchanged)
     torch.save(model.state_dict(),
-               os.path.join(checkpoint_dir, f"final_model{"_grayscale" if grayscale else ""}.pt"))
+               os.path.join(checkpoint_dir, model_name))
 
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    plt.plot(range(1, epochs + 1), train_accs, label='Training Accuracy')
-    plt.plot(range(1, epochs + 1), val_accs, label='Validation Accuracy')
-    plt.title('Training and Validation Accuracy')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.legend(loc='lower right')
-    plt.grid(True, alpha=0.3)
+    if plot:
+        plt.figure(figsize=(12, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(range(1, epochs + 1), train_accs, label='Training Accuracy')
+        plt.plot(range(1, epochs + 1), val_accs, label='Validation Accuracy')
+        plt.title('Training and Validation Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend(loc='lower right')
+        plt.grid(True, alpha=0.3)
 
-    plt.subplot(1, 2, 2)
-    plt.plot(range(1, epochs + 1), train_losses, label='Training Loss')
-    plt.plot(range(1, epochs + 1), val_losses, label='Validation Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend(loc='upper right')
-    plt.grid(True, alpha=0.3)
+        plt.subplot(1, 2, 2)
+        plt.plot(range(1, epochs + 1), train_losses, label='Training Loss')
+        plt.plot(range(1, epochs + 1), val_losses, label='Validation Loss')
+        plt.title('Training and Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend(loc='upper right')
+        plt.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    plt.show()
+        plt.tight_layout()
+        plt.show()
 
     print("Training completed.")
+
+
+if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        torch.backends.cudnn.benchmark = True
+
+    train(f"best_model{"_grayscale" if grayscale else ""}", l1_training_dir, True)
+
+    for l2_model_name in os.listdir(l2_training_dir):
+        l2_training_subdir = os.path.join(l2_training_dir, l2_model_name)
+        train(l2_training_subdir, l2_model_name)

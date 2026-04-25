@@ -44,7 +44,7 @@ def show_augmented_examples(
         n_examples_per_class: Max number of examples to show per class
         dpi: Screen DPI (affects perceived size)
     """
-    _class_names = dataset.class_names
+    _class_names = dataset.l1_class_names
     seen_counts = {cls_name: 0 for cls_name in _class_names}
 
     for images_batch, labels_batch in dataset:
@@ -131,7 +131,7 @@ val_ds = image_dataset_from_directory(
 )
 
 # Retrieve class names and number of classes
-class_names = train_ds.class_names
+class_names = train_ds.l1_class_names
 num_classes = len(class_names)
 print(f"Number of classes: {num_classes}")
 print(f"Class names: {class_names}")
