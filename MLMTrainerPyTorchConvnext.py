@@ -10,19 +10,24 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split, Subset
 from torchvision import datasets
+import kornia.filters as k_filters
 
 # ────────────────────────────────────────────────
 #  Key parameters (same as original)
 # ────────────────────────────────────────────────
-l1_training_dir = "training-data/level-1"
-l2_training_dir = "training-data/level-2"
-img_size = config["general"]["img_size"]  # original loaded size
-processed_img_size = config["general"]["cropped_img_size"]  # after crop / final model input
-batch_size = 8
-epochs = 50
+pattern_training_dir = os.path.join("training-data", "pattern")
+weave_training_dir = os.path.join("training-data", "weave")
+pattern_full_size = config["general"]["pattern_full_size"]
+pattern_crop_size = config["general"]["pattern_crop_size"]
+weave_full_size = config["general"]["weave_full_size"]
+weave_crop_size = config["general"]["weave_crop_size"]
+pattern_batch_size = config["general"]["pattern_batches"]
+weave_batch_size = config["general"]["weave_batches"]
+pattern_grayscale = False
+weave_grayscale = True
+epochs = 25
 validation_split = 0.2
 learning_rate = 1e-5
-grayscale = True
 
 
 # ────────────────────────────────────────────────
@@ -48,25 +53,110 @@ class ConvnextModelClassifier(nn.Module):
 
 
 # ────────────────────────────────────────────────
+#  Kornia / FFT Preprocessing Layers
+# ────────────────────────────────────────────────
+
+class BilateralFilterLayer(nn.Module):
+    def __init__(self, kernel_size=7, sigma_color=0.1, sigma_space=1.5):
+        super().__init__()
+        # sigma_color: how much intensity difference is allowed (higher = more smoothing)
+        # sigma_space: how much spatial distance is allowed
+        self.filter = k_filters.BilateralBlur(
+            kernel_size=(kernel_size, kernel_size),
+            sigma_color=sigma_color,
+            sigma_space=(sigma_space, sigma_space)
+        )
+
+    def forward(self, x):
+        # Kornia expects (B, C, H, W). If a single image (C, H, W) comes in, unsqueeze it.
+        is_single_image = x.ndim == 3
+        if x.ndim == 3:
+            x = x.unsqueeze(0)
+
+        x = self.filter(x)
+
+        return x.squeeze(0) if is_single_image else x
+
+
+class FFTLowPassLayer(nn.Module):
+    def __init__(self, cutoff_freq=0.2):
+        super().__init__()
+        self.cutoff = cutoff_freq
+
+    def forward(self, x):
+        is_single_image = x.ndim == 3
+        if is_single_image:
+            x = x.unsqueeze(0)
+
+        # 1. FFT to frequency domain
+        f = torch.fft.fftn(x, dim=(-2, -1))
+        f_shift = torch.fft.fftshift(f, dim=(-2, -1))
+
+        # 2. Create Mask
+        b, c, h, w = x.shape
+        center_h, center_w = h // 2, w // 2
+        y, x_grid = torch.meshgrid(torch.arange(h, device=x.device),
+                                   torch.arange(w, device=x.device), indexing='ij')
+
+        dist = torch.sqrt((y - center_h) ** 2 + (x_grid - center_w) ** 2)
+        max_dist = torch.sqrt(torch.tensor(center_h ** 2 + center_w ** 2, device=x.device))
+        mask = (dist / max_dist) < self.cutoff
+
+        # 3. Apply and Inverse FFT
+        f_shift_filtered = f_shift * mask
+        f_filtered = torch.fft.ifftshift(f_shift_filtered, dim=(-2, -1))
+        x_filtered = torch.fft.ifftn(f_filtered, dim=(-2, -1))
+
+        output = x_filtered.real
+        return output.squeeze(0) if is_single_image else output
+
+
+# ────────────────────────────────────────────────
 #  Data transforms / augmentation
 # ────────────────────────────────────────────────
-train_transform = transforms.Compose([
+train_transform_pattern = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
-    transforms.ColorJitter(contrast=0.5),
-    transforms.RandomRotation(degrees=3.6),
-    transforms.Resize(img_size, interpolation=transforms.InterpolationMode.LANCZOS),  # First resize to square
-    transforms.RandomResizedCrop(size=processed_img_size, interpolation=transforms.InterpolationMode.BILINEAR, scale=(0.8, 1)),  # Then random crop
-    transforms.RandomGrayscale(1 if grayscale else 0),
+    transforms.ColorJitter(contrast=0.5, hue=0.5, saturation=0.25),  # adjust these params?
+    transforms.RandomRotation(degrees=1.67),
+    transforms.Resize(pattern_full_size, interpolation=transforms.InterpolationMode.LANCZOS),
+    transforms.RandomCrop(size=pattern_crop_size),
+    transforms.RandomGrayscale(int(pattern_grayscale)),
+    transforms.ToTensor(),
+    BilateralFilterLayer(),
+    FFTLowPassLayer(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])
+])
+
+val_transform_pattern = transforms.Compose([
+    transforms.Resize(pattern_full_size, interpolation=transforms.InterpolationMode.LANCZOS),
+    transforms.CenterCrop(pattern_crop_size),
+    transforms.RandomGrayscale(int(pattern_grayscale)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
 
-val_transform = transforms.Compose([
-    transforms.Resize(img_size, interpolation=transforms.InterpolationMode.LANCZOS),
-    transforms.CenterCrop(processed_img_size),
-    transforms.RandomGrayscale(1 if grayscale else 0),
+train_transform_weave = transforms.Compose([
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomVerticalFlip(p=0.5),
+    transforms.ColorJitter(contrast=0.5),
+    transforms.RandomRotation(degrees=45),
+    transforms.Resize(weave_full_size, interpolation=transforms.InterpolationMode.LANCZOS),
+    transforms.CenterCrop(size=weave_crop_size),
+    transforms.RandomGrayscale(int(weave_grayscale)),
+    transforms.ToTensor(),
+    BilateralFilterLayer(sigma_color=0.05, sigma_space=1.5),
+    FFTLowPassLayer(cutoff_freq=0.5),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])
+])
+
+val_transform_weave = transforms.Compose([
+    transforms.Resize(weave_full_size, interpolation=transforms.InterpolationMode.LANCZOS),
+    transforms.CenterCrop(weave_crop_size),
+    transforms.RandomGrayscale(int(weave_grayscale)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
@@ -85,17 +175,16 @@ def visualize_transform_samples(data_dir, transform, num_samples=6):
         transform: The validation transform to apply
         num_samples (int): Number of image pairs to display
     """
+    print(f"Visualizing {data_dir}...")
     # Collect some image paths from all classes
     image_paths = []
-    for class_name in os.listdir(data_dir):
-        class_dir = os.path.join(data_dir, class_name)
+    for _ in range(num_samples):
+        class_dir = os.path.join(data_dir, random.choice(os.listdir(data_dir)))
         if not os.path.isdir(class_dir):
             continue
-        for img_name in os.listdir(class_dir):
-            if img_name.lower().endswith(('.png', '.jpg', '.jpeg')):
-                image_paths.append(os.path.join(class_dir, img_name))
-            if len(image_paths) >= num_samples * 2:  # safety margin
-                break
+        img_path = os.path.join(class_dir, random.choice(os.listdir(class_dir)))
+        if img_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+            image_paths.append(img_path)
         if len(image_paths) >= num_samples * 2:
             break
 
@@ -145,7 +234,7 @@ def visualize_transform_samples(data_dir, transform, num_samples=6):
     plt.show()
 
 
-def train(model_name: str, training_dir: str, plot = False):
+def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     # ────────────────────────────────────────────────
     #  Dataset loading & split
     # ────────────────────────────────────────────────
@@ -167,10 +256,10 @@ def train(model_name: str, training_dir: str, plot = False):
     val_subset = Subset(base_dataset, val_idx.indices)
 
     train_dataset = Subset(train_subset.dataset, train_subset.indices)
-    train_dataset.dataset.transform = train_transform
+    train_dataset.dataset.transform = train_transform_pattern
 
     val_dataset = Subset(val_subset.dataset, val_subset.indices)
-    val_dataset.dataset.transform = val_transform
+    val_dataset.dataset.transform = val_transform_pattern
 
     # ── DataLoaders ────────────────────────────────────────
     train_loader = DataLoader(
@@ -214,13 +303,6 @@ def train(model_name: str, training_dir: str, plot = False):
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     best_val_acc = 0.0
-
-    # ────────────────────────────────────────────────
-    #  Visualize some validation preprocessing examples
-    # ────────────────────────────────────────────────
-    if config['general']['debug']:
-        print("Showing sample images before/after train_transform...")
-        visualize_transform_samples(training_dir, train_transform, num_samples=6)
 
     # ────────────────────────────────────────────────
     #  Training loop
@@ -283,8 +365,8 @@ def train(model_name: str, training_dir: str, plot = False):
             print("  → Saved new best model")
 
     # Final save & plotting (unchanged)
-    torch.save(model.state_dict(),
-               os.path.join(checkpoint_dir, model_name))
+    # torch.save(model.state_dict(),
+    #            os.path.join(checkpoint_dir, model_name))
 
     if plot:
         plt.figure(figsize=(12, 5))
@@ -313,14 +395,15 @@ def train(model_name: str, training_dir: str, plot = False):
 
 
 if __name__ == '__main__':
+    while False:
+        visualize_transform_samples(pattern_training_dir, train_transform_pattern)
+        # visualize_transform_samples(weave_training_dir, train_transform_weave)
+        input()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     if torch.cuda.is_available():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
         torch.backends.cudnn.benchmark = True
 
-    train(f"best_model{"_grayscale" if grayscale else ""}", l1_training_dir, True)
-
-    for l2_model_name in os.listdir(l2_training_dir):
-        l2_training_subdir = os.path.join(l2_training_dir, l2_model_name)
-        train(l2_training_subdir, l2_model_name)
+    train(f"convnext/weave_best_model{"_grayscale" if weave_grayscale else ""}", weave_training_dir, weave_batch_size, True)
+    train(f"convnext/pattern_best_model{"_grayscale" if pattern_grayscale else ""}", pattern_training_dir, pattern_batch_size, True)

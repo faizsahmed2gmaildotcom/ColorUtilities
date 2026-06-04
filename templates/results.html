@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Results</title>
+    <style>
+        .row { display: flex; margin-bottom: 20px; }
+        .image { width: 200px; }
+        .dropdowns { flex: 1; }
+        select { margin: 5px; }
+        .processing { opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <form id="resultsForm" action="/save" method="post">
+        {% for image in images %}
+        <div class="row" id="row_{{ loop.index0 }}">
+            <div class="image">
+                <a href="{{ image.src }}" target="_blank">
+                    <img src="{{ image.src }}" width="200">
+                </a>
+            </div>
+            <div class="dropdowns">
+                <input type="hidden" name="img_name_{{ loop.index0 }}" value="{{ image.img_name }}">
+                <label>Fancy Name: <select name="fancy_{{ loop.index0 }}" disabled>
+                    {% for color in fancy_colors %}
+                    <option value="{{ color }}" {% if color == image.fancy %}selected{% endif %}>{{ color }}</option>
+                    {% endfor %}
+                </select></label><br>
+                <label>Primary Color: <select name="primary_{{ loop.index0 }}" disabled>
+                    {% for color in primary_colors %}
+                    <option value="{{ color }}" {% if color == image.primary %}selected{% endif %}>{{ color }}</option>
+                    {% endfor %}
+                </select></label><br>
+                <label>Secondary Color 1: <select name="secondary1_{{ loop.index0 }}" disabled>
+                    <option value=""></option>
+                    {% for color in primary_colors %}
+                    <option value="{{ color }}" {% if color == image.secondary1 %}selected{% endif %}>{{ color }}</option>
+                    {% endfor %}
+                </select></label><br>
+                <label>Secondary Color 2: <select name="secondary2_{{ loop.index0 }}" disabled>
+                    <option value=""></option>
+                    {% for color in primary_colors %}
+                    <option value="{{ color }}" {% if color == image.secondary2 %}selected{% endif %}>{{ color }}</option>
+                    {% endfor %}
+                </select></label><br>
+                <label>Pattern: <select name="pattern_{{ loop.index0 }}" disabled>
+                    {% for p in patterns %}
+                    <option value="{{ p }}" {% if p == image.pattern %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                </select></label><br>
+                <label>Weave: <select name="weave_{{ loop.index0 }}" disabled>
+                    {% for w in weaves %}
+                    <option value="{{ w }}" {% if w == image.weave %}selected{% endif %}>{{ w }}</option>
+                    {% endfor %}
+                </select></label><br>
+            </div>
+        </div>
+        {% endfor %}
+        <button type="submit">Download Results</button>
+    </form>
+
+    <script>
+        const images = {{ images | tojson }};
+        let currentIndex = 0;
+
+        function processNextImage() {
+            if (currentIndex >= images.length) {
+                return;
+            }
+            const image = images[currentIndex];
+            const filename = image.filename;
+            fetch(`/process_image/${filename}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Update the selects
+                    const row = document.getElementById(`row_${currentIndex}`);
+                    const selects = row.querySelectorAll('select');
+                    selects.forEach(select => {
+                        select.disabled = false;
+                    });
+                    // Set values
+                    row.querySelector(`select[name="fancy_${currentIndex}"]`).value = data.fancy;
+                    row.querySelector(`select[name="primary_${currentIndex}"]`).value = data.primary;
+                    row.querySelector(`select[name="secondary1_${currentIndex}"]`).value = data.secondary1;
+                    row.querySelector(`select[name="secondary2_${currentIndex}"]`).value = data.secondary2;
+                    row.querySelector(`select[name="pattern_${currentIndex}"]`).value = data.pattern;
+                    row.querySelector(`select[name="weave_${currentIndex}"]`).value = data.weave;
+                    currentIndex++;
+                    processNextImage();
+                })
+                .catch(error => {
+                    console.error('Error processing image:', error);
+                    currentIndex++;
+                    processNextImage();
+                });
+        }
+
+        // Start processing
+        processNextImage();
+    </script>
+</body>
+</html>

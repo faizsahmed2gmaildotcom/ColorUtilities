@@ -34,7 +34,8 @@ def rgbToLab(rgb_code: tuple[float, float, float]) -> LabColor:
 
 
 ALL_COLOR_NAMES = {"fancy-colors": [rgb for rgb in config["fancy-colors"]], "primary-colors": [rgb for rgb in config["primary-colors"]]}
-ALL_COLOR_CODES = {"RGB": {"fancy-colors": [c for c in config["fancy-colors"].values()], "primary-colors": [rgb for rgb in config["primary-colors"].values()]},
+ALL_COLOR_CODES = {"RGB": {"fancy-colors": [c for c in config["fancy-colors"].values()],
+                           "primary-colors": [rgb for rgb in config["primary-colors"].values()]},
                    "CIE2000": {"fancy-colors": [rgbToLab(rgb) for rgb in config["fancy-colors"].values()],
                                "primary-colors": [rgbToLab(rgb) for rgb in config["primary-colors"].values()]}}
 
@@ -53,9 +54,8 @@ def flattenArrayOfTuples(arr: np.ndarray) -> np.ndarray:
     return arr.reshape(-1, arr.shape[-1])
 
 
-def getFrequency(pixels: np.ndarray) -> list[list[Any]]:
+def getFreqList(pixels: np.ndarray) -> list[list[Any]]:
     pixels = np.asarray(pixels)
-
     data, occurrences = np.unique(pixels, axis=0, return_counts=True)
     data = data.tolist()
     occurrences = occurrences.tolist()
@@ -133,7 +133,8 @@ def colorDist(color_1: tuple[float, float, float] | LabColor, color_2: tuple[flo
         return dist(color_1, color_2)
 
 
-def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fancy-colors", "primary-colors"], mode: Literal["RGB", "CIE2000"] = "CIE2000") -> str:
+def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fancy-colors", "primary-colors"],
+                        mode: Literal["RGB", "CIE2000"] = "CIE2000") -> str:
     min_dist = float("inf")
     min_idx = -1
     if mode == "CIE2000":
@@ -144,7 +145,7 @@ def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fa
         if current_dist < min_dist:
             min_dist = current_dist
             min_idx = i
-    if debug: print(f"Closest color: {color_type} at dist {min_dist}")
+    # if debug: print(f"Closest color: {color_type} at dist {min_dist}")
 
     return ALL_COLOR_NAMES[color_type][min_idx]
 
@@ -462,8 +463,8 @@ def hasWhiteBackground(img_path: str) -> bool:
 
 def cropImage(img_path: str, box: tuple[float | None, float | None, float | None, float | None]):
     img_obj = Image.open(img_path)
-    new_box = ((0 if box[0] is None else box[0]), (0 if box[1] is None else box[1]),
-               (img_obj.width if box[2] is None else box[2]), (img_obj.height if box[3] is None else box[3]))
+    is_none = lambda x: 0 if x is None else x
+    new_box = (is_none(box[0]), is_none(box[1]), is_none(box[2]), is_none(box[3]))
     img_obj_cropped = img_obj.crop(new_box)
     img_obj.close()
 
@@ -473,5 +474,24 @@ def cropImage(img_path: str, box: tuple[float | None, float | None, float | None
     if debug: print(f"Cropped {img_path}: {img_obj.width}x{img_obj.height} -> {img_obj_cropped.width}x{img_obj_cropped.height}")
 
 
+# Get and sort the frequency of occurrences in a list
+def getFreq(_list: list[Any]) -> (dict[Any, int], int):
+    freqs = {val: 0 for val in _list}
+    total_freq = 0
+    for val in _list:
+        freqs[val] += 1
+        total_freq += 1
+    return dict(sorted(freqs.items(), key=lambda item: item[1], reverse=True)), total_freq
+
+# Sorted frequency dictionary
+def getFreqColorDict(rgb_colors: list[tuple[int, int, int]], color_type: Literal["primary-colors", "fancy-colors"], min_ratio = 0.0):
+    freqs, total_freq = getFreq([getNearestColorName(rgb, color_type) for rgb in rgb_colors])
+    return {k_v[0]: k_v[1] for i, k_v in enumerate(freqs.items()) if (i == 0) or (k_v[1] >= (min_ratio * total_freq))}
+
+
 if __name__ == "__main__":
-    print(ALL_COLOR_NAMES, '\n', ALL_COLOR_CODES["CIE2000"])
+    # print(ALL_COLOR_NAMES, '\n', ALL_COLOR_CODES["CIE2000"])
+    import random
+
+    ran_list = [random.randrange(1, 6) for _ in range(100)]
+    print(getFreq(ran_list))

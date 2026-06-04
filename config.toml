@@ -1,12 +1,40 @@
 [general]
 main_image_suffix = "_1f"
-debug = 0  # 0: False, 1: True
-img_size = [1400, 1400]  # Loaded [height, width]
-cropped_img_size = [1024, 1024]  # Processed [height, width]
+debug = 1  # 0: False, 1: True
+pattern_full_size = [800, 800]  # Loaded [height, width]
+pattern_crop_size = [400, 400]  # Processed [height, width]
+weave_full_size = [1400, 1400]
+weave_crop_size = [512, 512]
+pattern_batches = 12
+weave_batches = 10
 
 [spreadsheet-names]
 data = "Sheet1"
 filters = "Filters List"
+
+[primary-colors]
+"Pink" = [255, 192, 203]
+"Red" = [255, 0, 0]
+"Maroon" = [128, 0, 0]
+"Orange" = [255, 165, 0]
+"Yellow" = [255, 255, 0]
+"Gold" = [255, 215, 0]
+"Light Green" = [144, 238, 144]
+"Green" = [0, 128, 0]
+"Olive Green" = [128, 128, 0]
+"Dark Green" = [0, 100, 0]
+"Aqua" = [0, 255, 255]
+"Light Blue" = [173, 216, 230]
+"Blue" = [0, 0, 255]
+"Navy" = [0, 0, 128]
+"Purple" = [128, 0, 128]
+"Lavender" = [230, 230, 250]
+"Black" = [0, 0, 0]
+"Grey" = [128, 128, 128]
+"White" = [255, 255, 255]
+"Off White" = [250, 250, 240]
+"Tan" = [210, 180, 140]
+"Brown" = [165, 42, 42]
 
 [fancy-colors]
 "Egret" = [243, 236, 224]
@@ -2320,27 +2348,3 @@ filters = "Filters List"
 "Forest Biome" = [24, 74, 69]
 "Rain Forest" = [21, 70, 62]
 
-
-[primary-colors]
-"Pink" = [255, 192, 203]
-"Red" = [255, 0, 0]
-"Maroon" = [128, 0, 0]
-"Orange" = [255, 165, 0]
-"Yellow" = [255, 255, 0]
-"Gold" = [255, 215, 0]
-"Light Green" = [144, 238, 144]
-"Green" = [0, 128, 0]
-"Olive Green" = [128, 128, 0]
-"Dark Green" = [0, 100, 0]
-"Aqua" = [0, 255, 255]
-"Light Blue" = [173, 216, 230]
-"Blue" = [0, 0, 255]
-"Navy" = [0, 0, 128]
-"Purple" = [128, 0, 128]
-"Lavender" = [230, 230, 250]
-"Black" = [0, 0, 0]
-"Grey" = [128, 128, 128]
-"White" = [255, 255, 255]
-"Off White" = [250, 250, 240]
-"Tan" = [210, 180, 140]
-"Brown" = [165, 42, 42]

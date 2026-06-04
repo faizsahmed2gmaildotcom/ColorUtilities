@@ -10,3 +10,6 @@ pandas
 torch
 torchvision
 sqlparse
+kornia
+flask
+werkzeug
