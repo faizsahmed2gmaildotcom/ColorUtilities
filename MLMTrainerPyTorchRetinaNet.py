@@ -298,7 +298,7 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = os.path.join("logs", "fit", timestamp)
     os.makedirs(log_dir, exist_ok=True)
-    checkpoint_dir = "MLMs"
+    checkpoint_dir = "models"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     best_val_acc = 0.0

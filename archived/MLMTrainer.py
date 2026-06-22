@@ -97,8 +97,8 @@ history = model.fit(training_data,
                     validation_data=validation_data,
                     callbacks=[tensorboard_callback, early_stopping])
 
-model_name = input("Save mode in MLMs directory as: ")
-model.save(os.path.join("MLMs", model_name + ".keras"))
+model_name = input("Save mode in models directory as: ")
+model.save(os.path.join("models", model_name + ".keras"))
 plt.plot(history.history['accuracy'], label='train_accuracy')
 plt.plot(history.history['val_accuracy'], label='val_accuracy')
 plt.legend()

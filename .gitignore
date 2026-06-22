@@ -8,4 +8,4 @@ Divij.com
 logs/**
 training-data*/**
 processed-images/**
-MLMs/**
+models/**

@@ -4,7 +4,7 @@ import spreadsheetLib as sL
 from kmeans import kmeans as kmeans_orig
 from PIL import Image
 import os
-from patternDetectorPyTorch import predictPattern, predictWeave
+from patternDetectorPyTorch import predict, predictWeave
 
 def kmeans(points, k, centers=None, tolerance=1, max_iterations=0) -> list:
     kmeans_result = kmeans_orig(points, k, centers, tolerance, max_iterations)
@@ -46,7 +46,7 @@ def processImage(img_path):
     secondary_colors = list(pL.getFreqColorDict(secondary_kmeans, "primary-colors", min_sec_color_ratio).keys())
     primary_color = secondary_colors.pop(0)
     if len(secondary_colors) > 2: secondary_colors = secondary_colors[:2]
-    pattern = predictPattern(img_path)
+    pattern = predict(img_path)
     weave = predictWeave(img_path)
 
     return fancy_color, primary_color, secondary_colors, pattern, weave

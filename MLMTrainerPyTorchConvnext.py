@@ -1,4 +1,5 @@
 from config import *
+import tomli_w
 from torchvision import transforms, models
 import torch.nn as nn
 from PIL import Image
@@ -15,8 +16,6 @@ import kornia.filters as k_filters
 # ────────────────────────────────────────────────
 #  Key parameters (same as original)
 # ────────────────────────────────────────────────
-pattern_training_dir = os.path.join("training-data", "pattern")
-weave_training_dir = os.path.join("training-data", "weave")
 pattern_full_size = config["general"]["pattern_full_size"]
 pattern_crop_size = config["general"]["pattern_crop_size"]
 weave_full_size = config["general"]["weave_full_size"]
@@ -25,7 +24,7 @@ pattern_batch_size = config["general"]["pattern_batches"]
 weave_batch_size = config["general"]["weave_batches"]
 pattern_grayscale = False
 weave_grayscale = True
-epochs = 25
+epochs = 2
 validation_split = 0.2
 learning_rate = 1e-5
 
@@ -234,7 +233,10 @@ def visualize_transform_samples(data_dir, transform, num_samples=6):
     plt.show()
 
 
-def train(model_name: str, training_dir: str, batch_size: int, plot=False):
+model_cfgs = {}
+
+
+def train(model_path: str, training_dir: str, batch_size: int, train_transform, val_transform, plot=False):
     # ────────────────────────────────────────────────
     #  Dataset loading & split
     # ────────────────────────────────────────────────
@@ -256,10 +258,10 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     val_subset = Subset(base_dataset, val_idx.indices)
 
     train_dataset = Subset(train_subset.dataset, train_subset.indices)
-    train_dataset.dataset.transform = train_transform_pattern
+    train_dataset.dataset.transform = train_transform
 
     val_dataset = Subset(val_subset.dataset, val_subset.indices)
-    val_dataset.dataset.transform = val_transform_pattern
+    val_dataset.dataset.transform = val_transform
 
     # ── DataLoaders ────────────────────────────────────────
     train_loader = DataLoader(
@@ -284,9 +286,10 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     # ────────────────────────────────────────────────
     class_names = sorted(base_dataset.classes)
     num_classes = len(class_names)
-    model_name = f"{model_name}_{num_classes}.pt"
     print(f"Number of classes: {num_classes}")
     print(f"Class names: {class_names}")
+
+    model_cfgs.update({model_path + '.pt': {"num_classes": num_classes, "class_names": class_names}})
 
     model = ConvnextModelClassifier(num_classes).to(device)
 
@@ -299,8 +302,7 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = os.path.join("logs", "fit", timestamp)
     os.makedirs(log_dir, exist_ok=True)
-    checkpoint_dir = "MLMs"
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    os.makedirs(model_path, exist_ok=True)
 
     best_val_acc = 0.0
 
@@ -360,13 +362,12 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(),
-                       os.path.join(checkpoint_dir, model_name))
+            torch.save(model.state_dict(), model_path + '.pt')
             print("  → Saved new best model")
 
     # Final save & plotting (unchanged)
     # torch.save(model.state_dict(),
-    #            os.path.join(checkpoint_dir, model_name))
+    #            os.path.join(model_dir, model_name))
 
     if plot:
         plt.figure(figsize=(12, 5))
@@ -394,6 +395,34 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     print("Training completed.")
 
 
+def firstFP(dirpath: str):
+    return os.path.join(dirpath, os.listdir(dirpath)[0])
+
+
+def containsDir(dirpath: str):
+    return os.path.isdir(firstFP(dirpath))
+
+
+def fullTrain(training_dirname="", depth=0):
+    training_dirpath = os.path.join('training-data', training_dirname)
+    if not containsDir(firstFP(training_dirpath)):
+        return True
+
+    if not os.path.exists(os.path.join('models', training_dirname)):
+        os.mkdir(os.path.join('models', training_dirname))
+
+    if (depth > 0) and not os.path.exists(os.path.join(training_dirpath, 'main')):
+        raise FileNotFoundError(f"{training_dirpath}/main does not exist!")
+
+    for dirname in os.listdir(training_dirpath):
+        cur_training_dir = os.path.join(training_dirname, dirname)
+        if fullTrain(cur_training_dir, depth + 1):
+            train(os.path.join('models', cur_training_dir), os.path.join('training-data', cur_training_dir), pattern_batch_size,
+                  train_transform_pattern, val_transform_pattern)
+
+    return False
+
+
 if __name__ == '__main__':
     while False:
         visualize_transform_samples(pattern_training_dir, train_transform_pattern)
@@ -405,5 +434,7 @@ if __name__ == '__main__':
         print(f"GPU: {torch.cuda.get_device_name(0)}")
         torch.backends.cudnn.benchmark = True
 
-    train(f"convnext/weave_best_model{"_grayscale" if weave_grayscale else ""}", weave_training_dir, weave_batch_size, True)
-    train(f"convnext/pattern_best_model{"_grayscale" if pattern_grayscale else ""}", pattern_training_dir, pattern_batch_size, True)
+    fullTrain()
+
+    with open(os.path.join('models', 'config.toml'), "wb") as config_file:
+        tomli_w.dump(model_cfgs, config_file)

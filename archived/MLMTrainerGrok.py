@@ -178,7 +178,7 @@ model.summary()
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  # Unique log directory for each session
 tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)  # For saving logs
 checkpoint_callback = ModelCheckpoint(
-    filepath=os.path.join('MLMs', 'best_model.keras'),  # Save in Keras format for easier loading
+    filepath=os.path.join('models', 'best_model.keras'),  # Save in Keras format for easier loading
     save_best_only=True,
     monitor='val_accuracy',
     mode='max',
@@ -217,7 +217,7 @@ plt.title('Training and Validation Loss')
 plt.show()
 
 # Save the final model
-model.save(os.path.join('MLMs', 'final_model.keras'))
+model.save(os.path.join('models', 'final_model.keras'))
 
 # For predictions, load the model as follows:
 # loaded_model = tf.keras.models.load_model('best_model.keras' or 'final_model.keras')

@@ -10,7 +10,7 @@ class_names = sorted(os.listdir("training-data"))
 for img_file_name in sorted(os.listdir("test-images")):
     preprocessImage(os.path.join("test-images", img_file_name))
 
-model_names = sorted(os.listdir("MLMs"))
+model_names = sorted(os.listdir("models"))
 print("Select model:")
 for i, name in enumerate(model_names):
     print(f"{i}: {name}")
@@ -22,7 +22,7 @@ while (model_no < 0) or (model_no >= len(model_names)):
     except ValueError:
         continue
 
-selected_model_path = os.path.join("MLMs", model_names[model_no])
+selected_model_path = os.path.join("models", model_names[model_no])
 
 from tensorflow.keras.models import load_model
 import tensorflow as tf
