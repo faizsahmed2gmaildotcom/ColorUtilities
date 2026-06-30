@@ -15,8 +15,8 @@ import kornia.filters as k_filters
 # ────────────────────────────────────────────────
 #  Key parameters (same as original)
 # ────────────────────────────────────────────────
-pattern_training_dir = os.path.join("training-data", "pattern")
-weave_training_dir = os.path.join("training-data", "weave")
+pattern_training_dir = os.path.join("../training-data", "pattern")
+weave_training_dir = os.path.join("../training-data", "weave")
 pattern_full_size = config["general"]["pattern_full_size"]
 pattern_crop_size = config["general"]["pattern_crop_size"]
 weave_full_size = config["general"]["weave_full_size"]
@@ -298,7 +298,7 @@ def train(model_name: str, training_dir: str, batch_size: int, plot=False):
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = os.path.join("logs", "fit", timestamp)
     os.makedirs(log_dir, exist_ok=True)
-    checkpoint_dir = "models"
+    checkpoint_dir = "../models"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     best_val_acc = 0.0

@@ -1,21 +1,25 @@
 from config import *
-import tomli_w
+import tomli_w, gc
 from torchvision import transforms, models
+import torch
 import torch.nn as nn
 from PIL import Image
-import random
-import os
-import datetime
+import random, os, datetime
 import matplotlib.pyplot as plt
-import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split, Subset
 from torchvision import datasets
 import kornia.filters as k_filters
+from collections import Counter
 
 # ────────────────────────────────────────────────
 #  Key parameters (same as original)
 # ────────────────────────────────────────────────
+completed_models = [
+    "models/shirting/check/main",
+    "models/shirting/stripes/main",
+    "models/shirting/main"
+]
 pattern_full_size = config["general"]["pattern_full_size"]
 pattern_crop_size = config["general"]["pattern_crop_size"]
 weave_full_size = config["general"]["weave_full_size"]
@@ -24,7 +28,7 @@ pattern_batch_size = config["general"]["pattern_batches"]
 weave_batch_size = config["general"]["weave_batches"]
 pattern_grayscale = False
 weave_grayscale = True
-epochs = 2
+epochs = 25
 validation_split = 0.2
 learning_rate = 1e-5
 
@@ -58,6 +62,7 @@ class ConvnextModelClassifier(nn.Module):
 class BilateralFilterLayer(nn.Module):
     def __init__(self, kernel_size=7, sigma_color=0.1, sigma_space=1.5):
         super().__init__()
+        # kernel_size: size of blur block
         # sigma_color: how much intensity difference is allowed (higher = more smoothing)
         # sigma_space: how much spatial distance is allowed
         self.filter = k_filters.BilateralBlur(
@@ -77,6 +82,7 @@ class BilateralFilterLayer(nn.Module):
         return x.squeeze(0) if is_single_image else x
 
 
+# Makes things blurry. Lower cutoff_freq is blurrier.
 class FFTLowPassLayer(nn.Module):
     def __init__(self, cutoff_freq=0.2):
         super().__init__()
@@ -110,20 +116,76 @@ class FFTLowPassLayer(nn.Module):
         return output.squeeze(0) if is_single_image else output
 
 
+class PseudoHeightmapLayer(nn.Module):
+    def __init__(self, kernel_size=5, eps=1e-2, edge_weight=0.25):
+        """
+        Converts textile images into structural heightmaps.
+
+        Args:
+            kernel_size (int): Size of the local neighborhood window.
+            eps (float): Regularization. Smaller values preserve sharper structural edges.
+            edge_weight (float): Intensity of the surface relief contours.
+        """
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.eps = eps
+        self.edge_weight = edge_weight
+
+    def forward(self, x):
+        # Handle batching dimensions for Kornia (B, C, H, W)
+        is_single_image = x.ndim == 3
+        if is_single_image:
+            x = x.unsqueeze(0)
+
+        # 1. Establish single-channel luminance (Base Height Map)
+        if x.shape[1] == 3:
+            gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
+        else:
+            gray = x
+
+        # 2. Guided Filter: Suppresses chaotic noise, locks onto coherent structures
+        # We use the grayscale profile as its own structural guide map.
+        smoothed = k_filters.guided_blur(
+            guidance=gray,
+            input=gray,
+            kernel_size=self.kernel_size,
+            eps=self.eps
+        )
+
+        # 3. Micro-Surface Relief: Emphasizes organized thread borders
+        edges = k_filters.sobel(gray)
+
+        # 4. Synthesize Heightmap
+        heightmap = smoothed + self.edge_weight * edges
+        heightmap = torch.clamp(heightmap, 0.0, 1.0)
+
+        # 5. Broadcast back to 3 channels to maintain ConvNeXt compatibility
+        heightmap = heightmap.repeat(1, 3, 1, 1)
+
+        return heightmap.squeeze(0) if is_single_image else heightmap
+
+
 # ────────────────────────────────────────────────
 #  Data transforms / augmentation
 # ────────────────────────────────────────────────
 train_transform_pattern = transforms.Compose([
+    # Image transformations
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
-    transforms.ColorJitter(contrast=0.5, hue=0.5, saturation=0.25),  # adjust these params?
     transforms.RandomRotation(degrees=1.67),
-    transforms.Resize(pattern_full_size, interpolation=transforms.InterpolationMode.LANCZOS),
+    transforms.RandomResizedCrop(size=pattern_crop_size, scale=(0.4, 1.0),
+                                 interpolation=transforms.InterpolationMode.LANCZOS),
     transforms.RandomCrop(size=pattern_crop_size),
+    # transforms.RandomRotation(degrees=90, expand=True),
+
+    # Color processing
+    transforms.RandomAutocontrast(p=0.5),
+    transforms.ColorJitter(contrast=0.3, saturation=0.2),
     transforms.RandomGrayscale(int(pattern_grayscale)),
+
+    # Math filters
     transforms.ToTensor(),
-    BilateralFilterLayer(),
-    FFTLowPassLayer(),
+    BilateralFilterLayer(sigma_color=0.1, sigma_space=1.0),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
@@ -133,6 +195,7 @@ val_transform_pattern = transforms.Compose([
     transforms.CenterCrop(pattern_crop_size),
     transforms.RandomGrayscale(int(pattern_grayscale)),
     transforms.ToTensor(),
+    BilateralFilterLayer(sigma_color=0.1, sigma_space=1.0),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
@@ -235,15 +298,28 @@ def visualize_transform_samples(data_dir, transform, num_samples=6):
 
 model_cfgs = {}
 
+def saveCfg():
+    with open(os.path.join('models', 'config.toml'), "wb") as config_file:
+        tomli_w.dump(model_cfgs, config_file)
 
 def train(model_path: str, training_dir: str, batch_size: int, train_transform, val_transform, plot=False):
-    # ────────────────────────────────────────────────
-    #  Dataset loading & split
-    # ────────────────────────────────────────────────
     base_dataset = datasets.ImageFolder(
         training_dir,
         transform=transforms.ToTensor()
     )
+
+    class_names = sorted(base_dataset.classes)
+    num_classes = len(class_names)
+    print(f"Number of classes: {num_classes}")
+    print(f"Class names: {class_names}")
+
+    model_cfgs.update({model_path + '.pt': {"num_classes": num_classes, "class_names": class_names}})
+    if model_path in completed_models:
+        print("Skipped " + model_path + ".pt\n")
+        torch.cuda.empty_cache()
+        return
+    saveCfg()
+    print("Training " + model_path + ".pt")
 
     n_total = len(base_dataset)
     n_val = int(n_total * validation_split)
@@ -263,7 +339,6 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
     val_dataset = Subset(val_subset.dataset, val_subset.indices)
     val_dataset.dataset.transform = val_transform
 
-    # ── DataLoaders ────────────────────────────────────────
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -281,21 +356,8 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
         pin_memory=torch.cuda.is_available()
     )
 
-    # ────────────────────────────────────────────────
-    #  Classes
-    # ────────────────────────────────────────────────
-    class_names = sorted(base_dataset.classes)
-    num_classes = len(class_names)
-    print(f"Number of classes: {num_classes}")
-    print(f"Class names: {class_names}")
-
-    model_cfgs.update({model_path + '.pt': {"num_classes": num_classes, "class_names": class_names}})
-
     model = ConvnextModelClassifier(num_classes).to(device)
 
-    # ────────────────────────────────────────────────
-    #  Optimizer, loss, directories
-    # ────────────────────────────────────────────────
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
@@ -306,9 +368,6 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
 
     best_val_acc = 0.0
 
-    # ────────────────────────────────────────────────
-    #  Training loop
-    # ────────────────────────────────────────────────
     train_losses, val_losses = [], []
     train_accs, val_accs = [], []
 
@@ -340,6 +399,9 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
         val_loss = 0.0
         correct = total = 0
 
+        # Track misclassifications: (true_label, predicted_label)
+        misclassifications = []
+
         with torch.no_grad():
             for images, labels in val_loader:
                 images, labels = images.to(device), labels.to(device)
@@ -351,6 +413,13 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
                 total += labels.size(0)
                 correct += pred.eq(labels).sum().item()
 
+                # Identify where mistakes happened and store them
+                incorrect_mask = ~pred.eq(labels)
+                if incorrect_mask.any():
+                    true_inc = labels[incorrect_mask].cpu().numpy()
+                    pred_inc = pred[incorrect_mask].cpu().numpy()
+                    misclassifications.extend(zip(true_inc, pred_inc))
+
         val_loss /= len(val_loader)
         val_acc = correct / total
         val_losses.append(val_loss)
@@ -360,17 +429,29 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
               f"train loss: {train_loss:.4f}  acc: {train_acc:.4f} | "
               f"val   loss: {val_loss:.4f}  acc: {val_acc:.4f}")
 
+        # Print top misclassifications if errors exist
+        if misclassifications:
+            counter = Counter(misclassifications)
+            # Display up to the top 3 worst misclassification pairs
+            top_errors = counter.most_common(3)
+            error_strings = [
+                f"'{class_names[true]}' confused for '{class_names[pred]}' ({count}x)"
+                for (true, pred), count in top_errors
+            ]
+            print(f"  → Top Errors: {', '.join(error_strings)}")
+
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(), model_path + '.pt')
             print("  → Saved new best model")
 
-    # Final save & plotting (unchanged)
-    # torch.save(model.state_dict(),
-    #            os.path.join(model_dir, model_name))
+    # Free model memory for next model training
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
 
     if plot:
-        plt.figure(figsize=(12, 5))
+        plt.figure(figsize=(12, 5, 'px'))
         plt.subplot(1, 2, 1)
         plt.plot(range(1, epochs + 1), train_accs, label='Training Accuracy')
         plt.plot(range(1, epochs + 1), val_accs, label='Validation Accuracy')
@@ -395,17 +476,21 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
     print("Training completed.")
 
 
-def firstFP(dirpath: str):
-    return os.path.join(dirpath, os.listdir(dirpath)[0])
+def getFirstFP(dirpath: str):
+    try:
+        first_fp = os.listdir(dirpath)[0]
+    except IndexError:
+        raise FileNotFoundError(dirpath + " is empty!")
+    return os.path.join(dirpath, first_fp)
 
 
 def containsDir(dirpath: str):
-    return os.path.isdir(firstFP(dirpath))
+    return os.path.isdir(getFirstFP(dirpath))
 
 
 def fullTrain(training_dirname="", depth=0):
     training_dirpath = os.path.join('training-data', training_dirname)
-    if not containsDir(firstFP(training_dirpath)):
+    if not containsDir(getFirstFP(training_dirpath)):
         return True
 
     if not os.path.exists(os.path.join('models', training_dirname)):
@@ -417,17 +502,13 @@ def fullTrain(training_dirname="", depth=0):
     for dirname in os.listdir(training_dirpath):
         cur_training_dir = os.path.join(training_dirname, dirname)
         if fullTrain(cur_training_dir, depth + 1):
-            train(os.path.join('models', cur_training_dir), os.path.join('training-data', cur_training_dir), pattern_batch_size,
-                  train_transform_pattern, val_transform_pattern)
+            train(os.path.join('models', cur_training_dir), os.path.join('training-data', cur_training_dir),
+                  pattern_batch_size, train_transform_pattern, val_transform_pattern)
 
     return False
 
 
 if __name__ == '__main__':
-    while False:
-        visualize_transform_samples(pattern_training_dir, train_transform_pattern)
-        # visualize_transform_samples(weave_training_dir, train_transform_weave)
-        input()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     if torch.cuda.is_available():
@@ -435,6 +516,3 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = True
 
     fullTrain()
-
-    with open(os.path.join('models', 'config.toml'), "wb") as config_file:
-        tomli_w.dump(model_cfgs, config_file)

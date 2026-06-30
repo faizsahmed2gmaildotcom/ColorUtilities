@@ -2,11 +2,13 @@
 main_image_suffix = "_1f"
 debug = 1  # 0: False, 1: True
 pattern_full_size = [800, 800]  # Loaded [height, width]
-pattern_crop_size = [400, 400]  # Processed [height, width]
+pattern_crop_size = [750, 750]  # Processed [height, width]
+pattern_batches = 16
+
+# Unused (for now)
+weave_batches = 10
 weave_full_size = [1400, 1400]
 weave_crop_size = [512, 512]
-pattern_batches = 12
-weave_batches = 10
 
 [spreadsheet-names]
 data = "Sheet1"

@@ -9,6 +9,8 @@ from colormath.color_conversions import convert_color
 from PIL import Image, UnidentifiedImageError
 from typing import Callable
 
+_WHITE = 255 * 3 - 3  # Tolerance of 3
+
 
 def catch_error(f: Callable) -> Callable:
     def decoratedFunc(*args, **kwargs):
@@ -18,7 +20,7 @@ def catch_error(f: Callable) -> Callable:
             print("!!!WARNING: Unable to process image!!!")
             f(*args, **kwargs, error_code=UnidentifiedImageError)
         except IndexError:
-            print("!!!WARNING: Unable to process image!!!")
+            print("!!!WARNING: Unable to run function!!!")
             f(*args, **kwargs, error_code=IndexError)
 
     return decoratedFunc
@@ -33,7 +35,8 @@ def rgbToLab(rgb_code: tuple[float, float, float]) -> LabColor:
     return lab_color
 
 
-ALL_COLOR_NAMES = {"fancy-colors": [rgb for rgb in config["fancy-colors"]], "primary-colors": [rgb for rgb in config["primary-colors"]]}
+ALL_COLOR_NAMES = {"fancy-colors": [rgb for rgb in config["fancy-colors"]],
+                   "primary-colors": [rgb for rgb in config["primary-colors"]]}
 ALL_COLOR_CODES = {"RGB": {"fancy-colors": [c for c in config["fancy-colors"].values()],
                            "primary-colors": [rgb for rgb in config["primary-colors"].values()]},
                    "CIE2000": {"fancy-colors": [rgbToLab(rgb) for rgb in config["fancy-colors"].values()],
@@ -87,20 +90,19 @@ def removeWhiteBackground(pixels: np.ndarray) -> np.ndarray:
     """
     Assumes the background is only on the edge of the image, where the image is square.
     """
-    color_end_row = 0
-    color_end_col = 0
-    middle_row = len(pixels) // 2
-    middle_col = len(pixels[0]) // 2
-    white = 255 * 3 - 3  # Tolerance of 3
+    end_row = 0
+    end_col = 0
+    mid_row = len(pixels) // 2
+    mid_col = len(pixels[0]) // 2
 
-    while (pixels[color_end_row][middle_col].sum() >= white) and (pixels[color_end_row // 2][middle_col // 2].sum() >= white):
-        color_end_row += 1
-        if color_end_row == (len(pixels) - 1): break
-    while (pixels[middle_row][color_end_col].sum() >= white) and (pixels[middle_row // 2][color_end_col // 2].sum() >= white):
-        color_end_col += 1
-        if color_end_col == (len(pixels[0]) - 1): break
+    while (pixels[end_row][mid_col].sum() >= _WHITE) and (pixels[end_row // 2][mid_col // 2].sum() >= _WHITE) and (
+            end_row < (len(pixels) - 1)):
+        end_row += 1
+    while (pixels[mid_row][end_col].sum() >= _WHITE) and (pixels[mid_row // 2][end_col // 2].sum() >= _WHITE) and (
+            end_col < len(pixels[0]) - 1):
+        end_col += 1
 
-    return cropPixels(pixels, color_end_row, len(pixels) - 1 - color_end_row, color_end_col, len(pixels[0]) - 1 - color_end_col)
+    return cropPixels(pixels, end_row, len(pixels) - 1 - end_row, end_col, len(pixels[0]) - 1 - end_col)
 
 
 def cropPixels(pixels: np.ndarray, top: int, bottom: int, left: int, right: int) -> np.ndarray:
@@ -133,8 +135,8 @@ def colorDist(color_1: tuple[float, float, float] | LabColor, color_2: tuple[flo
         return dist(color_1, color_2)
 
 
-def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fancy-colors", "primary-colors"],
-                        mode: Literal["RGB", "CIE2000"] = "CIE2000") -> str:
+def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal['fancy-colors', 'primary-colors'],
+                        mode: Literal['RGB', 'CIE2000'] = "CIE2000") -> str:
     min_dist = float("inf")
     min_idx = -1
     if mode == "CIE2000":
@@ -145,7 +147,7 @@ def getNearestColorName(rgb_color: tuple[int, int, int], color_type: Literal["fa
         if current_dist < min_dist:
             min_dist = current_dist
             min_idx = i
-    # if debug: print(f"Closest color: {color_type} at dist {min_dist}")
+    # if debugged: print(f"Closest color: {color_type} at dist {min_dist}")
 
     return ALL_COLOR_NAMES[color_type][min_idx]
 
@@ -155,7 +157,8 @@ def blend(pixels: np.ndarray, block_size_x: int, block_size_y: int) -> np.ndarra
     for j in range(len(pixels) // block_size_y):
         blended_pixels.append([])
         for i in range(len(pixels[0]) // block_size_x):
-            block = cropPixels(pixels, j * block_size_y, (j + 1) * block_size_y, i * block_size_x, (i + 1) * block_size_x)
+            block = cropPixels(pixels, j * block_size_y, (j + 1) * block_size_y, i * block_size_x,
+                               (i + 1) * block_size_x)
             sum_colors = np.array([0, 0, 0])
             for row in block:
                 for pixel in row:
@@ -193,8 +196,8 @@ def getSurroundingPixels(pixels: np.ndarray, window_size: int, row: int, col: in
 
 def spreadSalientPixels(
         pixels: np.ndarray,
-        radius: int = 1,
         selection_method: str = salient_selection_method,
+        radius: int = 1,
         percent: float = 95.0,
         zscore_k: float = 1.0,
         weight_lum: float = 0.7,
@@ -401,7 +404,8 @@ def enhanceWhitePoint(pixels: np.ndarray) -> np.ndarray:
     print("Enhancing white point...")
     pixels_float = pixels.astype(float)
 
-    luminance = LUM_709['r'] * pixels_float[:, :, 0] + LUM_709['g'] * pixels_float[:, :, 1] + LUM_709['b'] * pixels_float[:, :, 2]
+    luminance = LUM_709['r'] * pixels_float[:, :, 0] + LUM_709['g'] * pixels_float[:, :, 1] + LUM_709['b'] * \
+                pixels_float[:, :, 2]
 
     # Bias to enhance bright pixels only
     lum_norm = luminance / 255.0
@@ -429,7 +433,7 @@ def convertToJPEG(src_path: str) -> str:
 
 
 @catch_error
-def preprocessImage(src_path: str, out_path: str = "", error_code: OSError = None) -> None:
+def preprocessImage(src_path: str, out_path: str = "", error_code=None) -> None:
     if error_code:
         if os.path.exists(src_path):
             os.remove(src_path)
@@ -471,7 +475,8 @@ def cropImage(img_path: str, box: tuple[float | None, float | None, float | None
     img_format: str = os.path.splitext(img_path)[-1][1:].lower()
     img_obj_cropped.save(img_path, format=img_format)
     img_obj_cropped.close()
-    if debug: print(f"Cropped {img_path}: {img_obj.width}x{img_obj.height} -> {img_obj_cropped.width}x{img_obj_cropped.height}")
+    if debug: print(
+        f"Cropped {img_path}: {img_obj.width}x{img_obj.height} -> {img_obj_cropped.width}x{img_obj_cropped.height}")
 
 
 # Get and sort the frequency of occurrences in a list
@@ -483,8 +488,10 @@ def getFreq(_list: list[Any]) -> (dict[Any, int], int):
         total_freq += 1
     return dict(sorted(freqs.items(), key=lambda item: item[1], reverse=True)), total_freq
 
+
 # Sorted frequency dictionary
-def getFreqColorDict(rgb_colors: list[tuple[int, int, int]], color_type: Literal["primary-colors", "fancy-colors"], min_ratio = 0.0):
+def getFreqColorDict(rgb_colors: list[tuple[int, int, int]], color_type: Literal["primary-colors", "fancy-colors"],
+                     min_ratio=0.0):
     freqs, total_freq = getFreq([getNearestColorName(rgb, color_type) for rgb in rgb_colors])
     return {k_v[0]: k_v[1] for i, k_v in enumerate(freqs.items()) if (i == 0) or (k_v[1] >= (min_ratio * total_freq))}
 

@@ -7,9 +7,10 @@ requests
 opencv-python
 matplotlib
 pandas
-torch
+torch  # CPU only
 torchvision
 sqlparse
 kornia
 flask
 werkzeug
+tomli-w
