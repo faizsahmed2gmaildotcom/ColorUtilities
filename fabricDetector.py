@@ -1,10 +1,10 @@
 from config import config
 import pixelLib as pL
-import spreadsheetLib as sL
+from archived import spreadsheetLib as sL
 from kmeans import kmeans as kmeans_orig
 from PIL import Image
 import os
-from patternDetectorPyTorch import predict, predictWeave
+from patternDetectorPyTorch import predictFull
 
 def kmeans(points, k, centers=None, tolerance=1, max_iterations=0) -> list:
     kmeans_result = kmeans_orig(points, k, centers, tolerance, max_iterations)
@@ -19,11 +19,12 @@ median_filter_size = 5
 salient_pixel_bias = 10
 img_scale_factor = 0.25
 sec_kmeans_centers = 20
+max_sec_colors = 2
 min_sec_color_ratio = 0.0
 
 
-def processImage(img_path):
-    pixels = pL.getPixelList(img_path, img_scale_factor)
+def predictImage(_img_path):
+    pixels = pL.getPixelList(_img_path, img_scale_factor)
     pixels = pL.removeWhiteBackground(pixels)
     pixels = pL.cropPixels(pixels, vertical_offset, len(pixels) - 1 - vertical_offset, horizontal_offset,
                            len(pixels[0]) - 1 - horizontal_offset)
@@ -33,7 +34,7 @@ def processImage(img_path):
     if pL.debug:
         cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
         cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
-        cf_img.save(os.path.join("processed-images", str(os.path.basename(img_path))), format="jpeg")
+        cf_img.save(os.path.join("processed-images", str(os.path.basename(_img_path))), format="jpeg")
 
     fancy_kmeans = kmeans(pL.getFreqList(flattened_pixels), 1)
     try:
@@ -42,14 +43,13 @@ def processImage(img_path):
         secondary_kmeans = kmeans(pL.getFreqList(flattened_pixels), 5)
     print(f"{secondary_kmeans = }")
 
-    fancy_color = pL.getNearestColorName(fancy_kmeans[0], "fancy-colors")
-    secondary_colors = list(pL.getFreqColorDict(secondary_kmeans, "primary-colors", min_sec_color_ratio).keys())
-    primary_color = secondary_colors.pop(0)
-    if len(secondary_colors) > 2: secondary_colors = secondary_colors[:2]
-    pattern = predict(img_path)
-    weave = predictWeave(img_path)
+    _fancy_color = pL.getNearestColorName(fancy_kmeans[0], "fancy-colors")
+    _secondary_colors = list(pL.getFreqColorDict(secondary_kmeans, "primary-colors", min_sec_color_ratio).keys())
+    if len(_secondary_colors) > max_sec_colors: _secondary_colors = _secondary_colors[:2]
+    _primary_color = _secondary_colors.pop(0)
+    _pattern = predictFull(_img_path, "models/shirting")
 
-    return fancy_color, primary_color, secondary_colors, pattern, weave
+    return _fancy_color, _primary_color, _secondary_colors, _pattern
 
 
 if __name__ == "__main__":
@@ -63,12 +63,12 @@ if __name__ == "__main__":
         img_name = img_name_new
 
         img_path = os.path.join(test_folder, img_file_name)
-        fancy_color, primary_color, secondary_colors_list, pattern, weave = processImage(img_path)
-        secondary_color = ', '.join(secondary_colors_list)
+        fancy_color, primary_color, secondary_colors_list, pattern = predictImage(img_path)
+        secondary_colors = ', '.join(secondary_colors_list)
 
         new_row = sL.Row()
         new_row.update(sku=img_name, Product_Name=fancy_color, color_filter_primary=primary_color,
-                       color_filter_secondary=secondary_color, pattern=pattern, weave=weave)
+                       color_filter_secondary=secondary_colors, pattern=pattern)
         sL.insertRow(new_row)
         sL.save()
 
@@ -77,8 +77,6 @@ if __name__ == "__main__":
         print("---Primary Color---\n"
               f"{primary_color}")
         print("---Secondary Colors---\n"
-              f"{secondary_color}")
+              f"{secondary_colors}")
         print("---Pattern---\n"
               f"{pattern}")
-        print("---Weave---\n"
-              f"{weave}")

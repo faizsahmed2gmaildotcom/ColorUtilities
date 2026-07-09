@@ -6,7 +6,7 @@ from config import *
 # ────────────────────────────────────────────────
 #  Configuration (should match your training script)
 # ────────────────────────────────────────────────
-from MLMTrainerPyTorchConvnext import val_transform_pattern, val_transform_weave
+from MLMTrainerPyTorchConvnext import val_transform_pattern
 from MLMTrainerPyTorchConvnext import ConvnextModelClassifier as ModelClassifier
 
 # Paths
@@ -71,10 +71,10 @@ def predictFull(img_path: str, models_dirpath: str, _classes=None, _confs=None, 
 
     sub_model_path = os.path.join(models_dirpath, main_class)
     if os.path.exists(sub_model_path):
-        # if sub model has sub models
+        # if submodel has submodels
         predictFull(img_path, sub_model_path, _classes, _confs, top_n=top_n)
     elif os.path.exists(sub_model_path + '.pt'):
-        # if sub model has no sub models
+        # if submodel has no submodels
         sub_classes, sub_confs = predictImage(img_path, sub_model_path + '.pt', top_n=top_n)
         _classes.append(sub_classes)
         _confs.append(sub_confs)

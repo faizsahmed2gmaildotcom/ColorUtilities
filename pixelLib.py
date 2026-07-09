@@ -196,12 +196,12 @@ def getSurroundingPixels(pixels: np.ndarray, window_size: int, row: int, col: in
 
 def spreadSalientPixels(
         pixels: np.ndarray,
-        selection_method: str = salient_selection_method,
         radius: int = 1,
         percent: float = 95.0,
         zscore_k: float = 1.0,
         weight_lum: float = 0.7,
         weight_sat: float = 0.3,
+        selection_method: str = salient_selection_method,
 ) -> np.ndarray:
     """
     Spread brighter/more noticeable pixels to surrounding pixels.

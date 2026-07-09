@@ -16,9 +16,10 @@ from collections import Counter
 #  Key parameters (same as original)
 # ────────────────────────────────────────────────
 completed_models = [
-    "models/shirting/check/main",
+    # "models/shirting/check/main",
     "models/shirting/stripes/main",
-    "models/shirting/main"
+    "models/shirting/main",
+    "models/shirting/dots/main"
 ]
 pattern_full_size = config["general"]["pattern_full_size"]
 pattern_crop_size = config["general"]["pattern_crop_size"]
@@ -298,9 +299,11 @@ def visualize_transform_samples(data_dir, transform, num_samples=6):
 
 model_cfgs = {}
 
+
 def saveCfg():
     with open(os.path.join('models', 'config.toml'), "wb") as config_file:
         tomli_w.dump(model_cfgs, config_file)
+
 
 def train(model_path: str, training_dir: str, batch_size: int, train_transform, val_transform, plot=False):
     base_dataset = datasets.ImageFolder(

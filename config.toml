@@ -10,6 +10,10 @@ weave_batches = 10
 weave_full_size = [1400, 1400]
 weave_crop_size = [512, 512]
 
+[patterns]
+shirting = ["buffalo check", "gingham check", "glen plaid  prince of wales", "graph check", "houndstooth", "madras check", "selfl check", "tartan check", "tattersall check", "windowpane check", "birdseye", "dots", "nailhead", "diamond weave", "herringbone", "semi-solid", "solid", "awning stripe", "bengal stripe", "candy stripe", "hairline stripe", "pencil stripe", "pin stripe", "self stripe", "track stripe"]
+suiting = []
+
 [spreadsheet-names]
 data = "Sheet1"
 filters = "Filters List"

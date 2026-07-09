@@ -13,7 +13,7 @@ DEFAULT_FILENAME_DICT: dict[str, dict[str, str]] = {
     '.xlsx': {}
 }
 
-out_dir = os.path.join("processed-images", "training-data")
+out_dir = os.path.join("processed-images", "../training-data")
 if not os.path.exists(out_dir): os.mkdir(out_dir)
 
 
@@ -30,7 +30,7 @@ class FileDict(dict):
 file_names = FileDict()
 
 VALID_COLS = [["sku"], ["pattern", "pattern_primary"]]  # Order is important! Can use a list of column names to select any one of them.
-TRAINING_DATA_PATH = "training-data"
+TRAINING_DATA_PATH = "../training-data"
 
 
 def getAllFpInDir(dir_path: str):
@@ -73,7 +73,7 @@ def prepareDivijExcel():
                 if (sku in file_names['.jpeg']) and isinstance(pattern, str):
                     pattern = pattern.lower().strip()
                     # print(f"Found {sku} at {file_names[img_ext][sku]}")
-                    class_dir = os.path.join("training-data", pattern)
+                    class_dir = os.path.join("../training-data", pattern)
                     if not os.path.exists(class_dir):
                         os.mkdir(class_dir)
 

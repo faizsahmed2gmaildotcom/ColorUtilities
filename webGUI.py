@@ -1,9 +1,9 @@
 from flask import Flask, request, render_template, send_from_directory, jsonify, send_file
 import os
 from werkzeug.utils import secure_filename
-from fabricDetector import processImage
+from fabricDetector import predictImage
 from config import config
-import spreadsheetLib as sL
+from archived import spreadsheetLib as sL
 import atexit
 
 app = Flask(__name__)
@@ -15,8 +15,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 fancy_colors = sorted(config["fancy-colors"].keys())
 primary_colors = sorted(config["primary-colors"].keys())
-patterns = sorted(os.listdir("training-data/pattern"))
-weaves = sorted(os.listdir("training-data/weave"))
+patterns = sorted(config["patterns"]["shirting"])
 
 
 @app.route('/')
@@ -45,14 +44,14 @@ def upload():
                 'pattern': 'loading...',
                 'weave': 'loading...'
             })
-    return render_template('results.html', images=images, fancy_colors=fancy_colors, primary_colors=primary_colors, patterns=patterns,
-                           weaves=weaves)
+    return render_template('results.html', images=images, fancy_colors=fancy_colors, primary_colors=primary_colors,
+                           patterns=patterns)
 
 
 @app.route('/process_image/<filename>')
 def process_image(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    fancy, primary, secondary_list, pattern, weave = processImage(filepath)
+    fancy, primary, secondary_list, pattern = predictImage(filepath)
     secondary1 = secondary_list[0] if len(secondary_list) > 0 else ''
     secondary2 = secondary_list[1] if len(secondary_list) > 1 else ''
     return jsonify({
@@ -60,8 +59,7 @@ def process_image(filename):
         'primary': primary,
         'secondary1': secondary1,
         'secondary2': secondary2,
-        'pattern': pattern,
-        'weave': weave
+        'pattern': pattern
     })
 
 
@@ -76,11 +74,10 @@ def save():
             secondary1 = request.form.get(f'secondary1_{idx}')
             secondary2 = request.form.get(f'secondary2_{idx}')
             pattern = request.form.get(f'pattern_{idx}')
-            weave = request.form.get(f'weave_{idx}')
             secondary = ', '.join([s for s in [secondary1, secondary2] if s])
             new_row = sL.Row()
             new_row.update(sku=img_name, Product_Name=fancy, color_filter_primary=primary,
-                           color_filter_secondary=secondary, pattern=pattern, weave=weave)
+                           color_filter_secondary=secondary, pattern=pattern)
             sL.insertRow(new_row)
     sL.save()
 
