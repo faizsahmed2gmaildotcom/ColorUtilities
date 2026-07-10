@@ -1,3 +1,4 @@
+from typing import Literal
 from config import config
 import pixelLib as pL
 from archived import spreadsheetLib as sL
@@ -6,11 +7,12 @@ from PIL import Image
 import os
 from patternDetectorPyTorch import predictFull
 
+
 def kmeans(points, k, centers=None, tolerance=1, max_iterations=0) -> list:
     kmeans_result = kmeans_orig(points, k, centers, tolerance, max_iterations)
-    # remove anomalous results
-    while [0, 0, 0] in kmeans_result: kmeans_result.remove([0, 0, 0])
+    while [0, 0, 0] in kmeans_result: kmeans_result.remove([0, 0, 0])  # Remove anomalous results
     return kmeans_result
+
 
 test_folder = "test-images"
 vertical_offset = 10
@@ -23,7 +25,7 @@ max_sec_colors = 2
 min_sec_color_ratio = 0.0
 
 
-def predictImage(_img_path):
+def predictImage(_img_path, mode: Literal['shirting', 'suiting']):
     pixels = pL.getPixelList(_img_path, img_scale_factor)
     pixels = pL.removeWhiteBackground(pixels)
     pixels = pL.cropPixels(pixels, vertical_offset, len(pixels) - 1 - vertical_offset, horizontal_offset,
@@ -47,7 +49,7 @@ def predictImage(_img_path):
     _secondary_colors = list(pL.getFreqColorDict(secondary_kmeans, "primary-colors", min_sec_color_ratio).keys())
     if len(_secondary_colors) > max_sec_colors: _secondary_colors = _secondary_colors[:2]
     _primary_color = _secondary_colors.pop(0)
-    _pattern = predictFull(_img_path, "models/shirting")
+    _pattern = predictFull(_img_path, "models/" + mode)
 
     return _fancy_color, _primary_color, _secondary_colors, _pattern
 

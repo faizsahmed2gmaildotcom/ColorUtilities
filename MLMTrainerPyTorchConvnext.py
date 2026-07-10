@@ -13,10 +13,10 @@ import kornia.filters as k_filters
 from collections import Counter
 
 # ────────────────────────────────────────────────
-#  Key parameters (same as original)
+#  Key parameters
 # ────────────────────────────────────────────────
 completed_models = [
-    # "models/shirting/check/main",
+    "models/shirting/check/main",
     "models/shirting/stripes/main",
     "models/shirting/main",
     "models/shirting/dots/main"
@@ -35,7 +35,7 @@ learning_rate = 1e-5
 
 
 # ────────────────────────────────────────────────
-#  Model - ConvNeXt
+#  ConvNeXt Model
 # ────────────────────────────────────────────────
 class ConvnextModelClassifier(nn.Module):
     def __init__(self, _num_classes: int):
