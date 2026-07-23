@@ -50,16 +50,18 @@ def upload():
 
 @app.route('/process_image/<filename>')
 def process_image(filename):
+    print()
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    fancy, primary, secondary_list, pattern = predictImage(filepath)
+    fancy, primary, secondary_list, pattern_dat = predictImage(filepath, 'shirting')
     secondary1 = secondary_list[0] if len(secondary_list) > 0 else ''
     secondary2 = secondary_list[1] if len(secondary_list) > 1 else ''
+    print(pattern_dat)
     return jsonify({
         'fancy': fancy,
         'primary': primary,
         'secondary1': secondary1,
         'secondary2': secondary2,
-        'pattern': pattern
+        'pattern': pattern_dat[0][-1][0]
     })
 
 

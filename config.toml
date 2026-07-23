@@ -1,8 +1,8 @@
 [general]
 main_image_suffix = "_1f"
-debug = 1  # 0: False, 1: True
+debug = 0  # 0: False, 1: True
 pattern_full_size = [800, 800]  # Loaded [height, width]
-pattern_crop_size = [750, 750]  # Processed [height, width]
+pattern_crop_size = [800, 800]  # Processed [height, width]
 pattern_batches = 16
 
 # Unused (for now)
@@ -11,7 +11,7 @@ weave_full_size = [1400, 1400]
 weave_crop_size = [512, 512]
 
 [patterns]
-shirting = ["buffalo check", "gingham check", "glen plaid  prince of wales", "graph check", "houndstooth", "madras check", "selfl check", "tartan check", "tattersall check", "windowpane check", "birdseye", "dots", "nailhead", "diamond weave", "herringbone", "semi-solid", "solid", "awning stripe", "bengal stripe", "candy stripe", "hairline stripe", "pencil stripe", "pin stripe", "self stripe", "track stripe"]
+shirting = ["buffalo check", "gingham check", "glen plaid  prince of wales", "graph check", "houndstooth", "madras check", "self check", "tartan check", "tattersall check", "windowpane check", "birdseye", "dots", "nailhead", "diamond weave", "herringbone", "semi-solid", "solid", "awning stripe", "bengal stripe", "candy stripe", "hairline stripe", "pencil stripe", "pin stripe", "self stripe", "track stripe"]
 suiting = []
 
 [spreadsheet-names]

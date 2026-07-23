@@ -53,7 +53,7 @@ def insertAndIncrement(dict_: dict[Any, int], key: Any):
         dict_[key] += 1
 
 
-def flattenArrayOfTuples(arr: np.ndarray) -> np.ndarray:
+def flattenTupleArray(arr: np.ndarray) -> np.ndarray:
     return arr.reshape(-1, arr.shape[-1])
 
 
@@ -90,6 +90,7 @@ def removeWhiteBackground(pixels: np.ndarray) -> np.ndarray:
     """
     Assumes the background is only on the edge of the image, where the image is square.
     """
+    print("Removing white background... ", end="")
     end_row = 0
     end_col = 0
     mid_row = len(pixels) // 2
@@ -101,7 +102,7 @@ def removeWhiteBackground(pixels: np.ndarray) -> np.ndarray:
     while (pixels[mid_row][end_col].sum() >= _WHITE) and (pixels[mid_row // 2][end_col // 2].sum() >= _WHITE) and (
             end_col < len(pixels[0]) - 1):
         end_col += 1
-
+    print(f'{end_row = } | {end_col = }')
     return cropPixels(pixels, end_row, len(pixels) - 1 - end_row, end_col, len(pixels[0]) - 1 - end_col)
 
 
@@ -449,7 +450,7 @@ def preprocessImage(src_path: str, out_path: str = "", error_code=None) -> None:
     pixels = removeWhiteBackground(pixels)
     pixels = cropPixels(pixels, 10, len(pixels) - 10, 20, len(pixels[0]) - 20)
     new_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
-    flattened_pixels = flattenArrayOfTuples(pixels)
+    flattened_pixels = flattenTupleArray(pixels)
     if flattened_pixels.shape[0] == 0: return
     new_img.putdata(list(map(tuple, flattened_pixels.tolist())))
     new_img.save(out_path, format="jpeg")
@@ -480,7 +481,7 @@ def cropImage(img_path: str, box: tuple[float | None, float | None, float | None
 
 
 # Get and sort the frequency of occurrences in a list
-def getFreq(_list: list[Any]) -> (dict[Any, int], int):
+def getFreq(_list: list[Any]):
     freqs = {val: 0 for val in _list}
     total_freq = 0
     for val in _list:
@@ -490,15 +491,10 @@ def getFreq(_list: list[Any]) -> (dict[Any, int], int):
 
 
 # Sorted frequency dictionary
-def getFreqColorDict(rgb_colors: list[tuple[int, int, int]], color_type: Literal["primary-colors", "fancy-colors"],
-                     min_ratio=0.0):
+def getColorFreq(rgb_colors: list[tuple[int, int, int]], color_type: Literal["primary-colors", "fancy-colors"], min_ratio=0.0):
     freqs, total_freq = getFreq([getNearestColorName(rgb, color_type) for rgb in rgb_colors])
-    return {k_v[0]: k_v[1] for i, k_v in enumerate(freqs.items()) if (i == 0) or (k_v[1] >= (min_ratio * total_freq))}
+    return {c_f[0]: c_f[1] for i, c_f in enumerate(freqs.items()) if (i == 0) or (c_f[1] >= (min_ratio * total_freq))}
 
 
 if __name__ == "__main__":
-    # print(ALL_COLOR_NAMES, '\n', ALL_COLOR_CODES["CIE2000"])
-    import random
-
-    ran_list = [random.randrange(1, 6) for _ in range(100)]
-    print(getFreq(ran_list))
+    print(str(ALL_COLOR_NAMES) + '\n' + str(ALL_COLOR_CODES["CIE2000"]))

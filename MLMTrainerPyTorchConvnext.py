@@ -19,7 +19,7 @@ completed_models = [
     "models/shirting/check/main",
     "models/shirting/stripes/main",
     "models/shirting/main",
-    "models/shirting/dots/main"
+    # "models/shirting/dots/main"
 ]
 pattern_full_size = config["general"]["pattern_full_size"]
 pattern_crop_size = config["general"]["pattern_crop_size"]
@@ -47,6 +47,7 @@ class ConvnextModelClassifier(nn.Module):
             self.base.classifier[1],  # Flatten
             nn.Dropout(0.5),
             nn.Linear(in_features, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             nn.Linear(512, _num_classes)
@@ -174,19 +175,19 @@ train_transform_pattern = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
     transforms.RandomRotation(degrees=1.67),
-    transforms.RandomResizedCrop(size=pattern_crop_size, scale=(0.4, 1.0),
+    transforms.RandomResizedCrop(size=pattern_crop_size, scale=(0.9, 1.0),
                                  interpolation=transforms.InterpolationMode.LANCZOS),
     transforms.RandomCrop(size=pattern_crop_size),
     # transforms.RandomRotation(degrees=90, expand=True),
 
     # Color processing
-    transforms.RandomAutocontrast(p=0.5),
-    transforms.ColorJitter(contrast=0.3, saturation=0.2),
+    # transforms.RandomAutocontrast(p=0.5),
+    # transforms.ColorJitter(contrast=0.3, saturation=0.2),
     transforms.RandomGrayscale(int(pattern_grayscale)),
 
     # Math filters
     transforms.ToTensor(),
-    BilateralFilterLayer(sigma_color=0.1, sigma_space=1.0),
+    # BilateralFilterLayer(sigma_color=0.1, sigma_space=1.0),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225])
 ])
@@ -305,7 +306,34 @@ def saveCfg():
         tomli_w.dump(model_cfgs, config_file)
 
 
-def train(model_path: str, training_dir: str, batch_size: int, train_transform, val_transform, plot=False):
+def plotResults(plot_name: str, _epoch: int, _train_accs, _val_accs, _train_losses, _val_losses):
+    plt.figure(figsize=(12.0, 5.0, 'px'))
+    plt.subplot(1, 2, 1)
+    plt.plot(range(1, _epoch + 1), _train_accs, label='Training Accuracy')
+    plt.plot(range(1, _epoch + 1), _val_accs, label='Validation Accuracy')
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.legend(loc='lower right')
+    plt.grid(True, alpha=0.3)
+
+    plt.subplot(1, 2, 2)
+    plt.plot(range(1, _epoch + 1), _train_losses, label='Training Loss')
+    plt.plot(range(1, _epoch + 1), _val_losses, label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend(loc='upper right')
+    plt.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    os.makedirs('plots/1', exist_ok=True)
+    next_folder = int(max(os.listdir('plots'))) + 1
+    os.mkdir(f"plots/{next_folder}")
+    plt.savefig(f"plots/{next_folder}/{plot_name}")
+
+
+def train(model_path: str, training_dir: str, batch_size: int, train_transform, val_transform):
     base_dataset = datasets.ImageFolder(
         training_dir,
         transform=transforms.ToTensor()
@@ -362,6 +390,7 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
     model = ConvnextModelClassifier(num_classes).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     criterion = nn.CrossEntropyLoss()
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -427,6 +456,7 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
         val_acc = correct / total
         val_losses.append(val_loss)
         val_accs.append(val_acc)
+        # scheduler.step(val_loss)
 
         print(f"Epoch {epoch + 1:3d}/{epochs} | "
               f"train loss: {train_loss:.4f}  acc: {train_acc:.4f} | "
@@ -448,33 +478,12 @@ def train(model_path: str, training_dir: str, batch_size: int, train_transform, 
             torch.save(model.state_dict(), model_path + '.pt')
             print("  → Saved new best model")
 
+        plotResults(os.path.split(model_path)[-1], epoch + 1, train_accs, val_accs, train_losses, val_losses)
+
     # Free model memory for next model training
     del model
     gc.collect()
     torch.cuda.empty_cache()
-
-    if plot:
-        plt.figure(figsize=(12, 5, 'px'))
-        plt.subplot(1, 2, 1)
-        plt.plot(range(1, epochs + 1), train_accs, label='Training Accuracy')
-        plt.plot(range(1, epochs + 1), val_accs, label='Validation Accuracy')
-        plt.title('Training and Validation Accuracy')
-        plt.xlabel('Epoch')
-        plt.ylabel('Accuracy')
-        plt.legend(loc='lower right')
-        plt.grid(True, alpha=0.3)
-
-        plt.subplot(1, 2, 2)
-        plt.plot(range(1, epochs + 1), train_losses, label='Training Loss')
-        plt.plot(range(1, epochs + 1), val_losses, label='Validation Loss')
-        plt.title('Training and Validation Loss')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.legend(loc='upper right')
-        plt.grid(True, alpha=0.3)
-
-        plt.tight_layout()
-        plt.show()
 
     print("Training completed.")
 
