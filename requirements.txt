@@ -16,3 +16,5 @@ kornia
 flask
 werkzeug
 tomli-w
+torch-ema
+scikit-learn

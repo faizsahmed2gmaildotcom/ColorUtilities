@@ -1,6 +1,6 @@
 import os, shutil
 from time import time
-from pixelLib import preprocessImage
+from pixelLib import preprocessImageFile
 import pandas as pd
 import re
 import ast
@@ -80,7 +80,7 @@ def prepareDivijExcel():
                     result_path = os.path.join(class_dir, sku + ".jpeg")
                     if not os.path.exists(result_path):
                         start = time()
-                        preprocessImage(file_names['.jpeg'][sku], result_path)
+                        preprocessImageFile(file_names['.jpeg'][sku], result_path)
 
                         total_time += time() - start
                         imgs_processed += 1
@@ -100,7 +100,7 @@ def prepareDivijSQL(preprocess):
                 if not img_name.endswith("_1f"):
                     os.remove(img_path)
                     continue
-                preprocessImage(img_path)
+                preprocessImageFile(img_path)
 
         file_names.reset()
         getAllFpInDir("product_images")
@@ -161,7 +161,7 @@ def prepare():
     for ext in file_names:
         for img_path in sorted(file_names[ext].values()):
             print(f"Checking {img_path}...")
-            preprocessImage(img_path)
+            preprocessImageFile(img_path)
 
 
 if __name__ == '__main__':

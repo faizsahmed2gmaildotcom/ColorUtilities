@@ -433,8 +433,27 @@ def convertToJPEG(src_path: str) -> str:
     return path + ".jpeg"
 
 
+def preprocessPixels(img_path: str) -> np.ndarray[tuple[int, int, int]]:
+    pixels = getPixelList(img_path)
+    pixels = removeWhiteBackground(pixels)
+    pixels = cropPixels(pixels, 10, len(pixels) - 10, 10, len(pixels[0]) - 10)
+    # pixels = medianFilter(pixels, 5)
+    # pixels = spreadSalientPixels(pixels, 10)
+    return pixels
+
+def preprocessImagePIL(img_path: str) -> Image.Image | None:
+    pixels = preprocessPixels(img_path)
+    flattened_pixels = flattenTupleArray(pixels)
+    if flattened_pixels.shape[0] == 0: return None
+
+    new_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
+    new_img.putdata(list(map(tuple, flattened_pixels.tolist())))
+    return new_img
+
+
+# DO NOT RUN THIS FUNCTION MORE THAN ONCE ON ANY IMAGE, EVER
 @catch_error
-def preprocessImage(src_path: str, out_path: str = "", error_code=None) -> None:
+def preprocessImageFile(src_path: str, out_path: str = "", error_code=None) -> None:
     if error_code:
         if os.path.exists(src_path):
             os.remove(src_path)
@@ -445,18 +464,10 @@ def preprocessImage(src_path: str, out_path: str = "", error_code=None) -> None:
     if out_path == "": out_path = src_path
 
     if not hasWhiteBackground(src_path): return
-
-    pixels = getPixelList(src_path)
-    pixels = removeWhiteBackground(pixels)
-    pixels = cropPixels(pixels, 10, len(pixels) - 10, 20, len(pixels[0]) - 20)
-    new_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
-    flattened_pixels = flattenTupleArray(pixels)
-    if flattened_pixels.shape[0] == 0: return
-    new_img.putdata(list(map(tuple, flattened_pixels.tolist())))
+    new_img = preprocessImagePIL(src_path)
     new_img.save(out_path, format="jpeg")
     new_img.close()
     if out_path != src_path: os.remove(src_path)
-    if debug: print(f"Processed: {out_path}")
 
 
 def hasWhiteBackground(img_path: str) -> bool:

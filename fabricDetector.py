@@ -1,9 +1,8 @@
-import io
 from typing import Literal
 import pixelLib as pL
 from kmeans import kmeans as kmeans_orig
 from PIL import Image
-import os, tempfile
+import os
 from patternDetectorPyTorch import predictFull
 
 
@@ -13,34 +12,21 @@ def kmeans(points, k, centers=None, tolerance=1, max_iterations=0) -> list:
     return kmeans_result
 
 
-test_folder = "test-images"
-vertical_offset = 10
-horizontal_offset = 10
-median_filter_size = 5
-salient_pixel_bias = 10
+test_folder = "test-data"
 sec_kmeans_centers = 20
 max_sec_colors = 2
 min_sec_color_makeup = 0.0
 
 
 def predictImage(_img_path, mode: Literal['shirting', 'suiting']):
-    pixels = pL.getPixelList(_img_path)
-    pixels = pL.removeWhiteBackground(pixels)
-    pixels = pL.cropPixels(pixels, vertical_offset, len(pixels) - 1 - vertical_offset, horizontal_offset, len(pixels[0]) - 1 - horizontal_offset)
-    # pixels = pL.medianFilter(pixels, median_filter_size)
-    # pixels = pL.spreadSalientPixels(pixels, salient_pixel_bias)
+    pixels = pL.preprocessPixels(_img_path)
     flattened_pixels = pL.flattenTupleArray(pixels)
-    if pL.debug:
-        cf_img = Image.new("RGB", (len(pixels[0]), len(pixels)))
-        cf_img.putdata(list(map(tuple, flattened_pixels.tolist())))
-        cf_img.save(os.path.join("processed-images", str(os.path.basename(_img_path))), format="jpeg")
 
     fancy_kmeans = kmeans(pL.getFreqList(flattened_pixels), 1)
     try:
         secondary_kmeans = kmeans(pL.getFreqList(flattened_pixels), sec_kmeans_centers)
     except ValueError:
         secondary_kmeans = kmeans(pL.getFreqList(flattened_pixels), 5)
-    print(f"{secondary_kmeans = }")
 
     # Color detection
     _fancy_color = pL.getNearestColorName(fancy_kmeans[0], "fancy-colors")
@@ -88,5 +74,5 @@ if __name__ == "__main__":
             print(f"\tModel Tier {i + 1}:")
             print(f"\t\tClasses:     {tier_classes}")
             print(f"\t\tConfidences: {formatted_confs}")
-        print(f"\nFinal pattern: {' + '.join(pattern_dat[0][-1][i] for i, conf in enumerate(pattern_dat[1][-1]) if conf > 10.0)}")
+        print(f"\nFinal pattern: {' + '.join(pattern_dat[0][-1][i] for i, conf in enumerate(pattern_dat[1][-1]) if conf > 20.0)}")
         print()

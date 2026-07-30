@@ -3,22 +3,10 @@ import torch
 from PIL import Image
 from config import *
 
-# ────────────────────────────────────────────────
-#  Configuration (should match your training script)
-# ────────────────────────────────────────────────
-from MLMTrainerPyTorchConvnext import val_transform_pattern
-from MLMTrainerPyTorchConvnext import ConvnextModelClassifier as ModelClassifier
-
 # Paths
-test_data_dir = "test-images"
+test_data_dir = "test-data"
 models_dir = "models"
 img_ext = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff')
-
-with open(os.path.join(models_dir, "config.toml"), "rb") as config_file:
-    from tomllib import load
-
-    model_cfgs: dict[str, Any] = load(config_file)
-    config_file.close()
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE.type}")
@@ -28,28 +16,29 @@ print(f"Using device: {DEVICE.type}")
 #  Load model and weights
 # ────────────────────────────────────────────────
 def loadModel(model_path: str):
-    model = ModelClassifier(model_cfgs[model_path]["num_classes"]).to(DEVICE)
-    model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+    from MLMTrainerPyTorchConvnext import ConvnextModelClassifier
+    from torch.nn import Module
+    checkpoint: dict[str, Any] = torch.load(model_path, map_location=DEVICE, weights_only=False)
+    model: Module = ConvnextModelClassifier(len(checkpoint['class_names'])).to(DEVICE)
+    model.load_state_dict(checkpoint['model'])
     model.eval()
-    return model
+    return model, checkpoint
 
 
 # ────────────────────────────────────────────────
 #  Prediction function (single image)
 # ────────────────────────────────────────────────
-def predictImage(PIL_img: Image.Image, model_path: str, transform=val_transform_pattern, top_n=2):
-    model = loadModel(model_path)
-    class_names = model_cfgs[model_path]["class_names"]
-
-    img_tensor = transform(PIL_img).unsqueeze(0).to(DEVICE)  # add batch dimension
+def predictImage(PIL_img: Image.Image, model_path: str, top_n: int):
+    model, checkpoint = loadModel(model_path)
+    img_tensor = checkpoint['transform'](PIL_img).unsqueeze(0).to(DEVICE)  # add batch dimension
 
     # Forward pass
     with torch.no_grad():
         logits = model(img_tensor)
         probabilities = torch.softmax(logits, dim=1)
-        top_probabilities, top_indices = torch.topk(probabilities, k=min(top_n, len(class_names)), dim=1)
+        top_probabilities, top_indices = torch.topk(probabilities, k=min(top_n, len(checkpoint['class_names'])), dim=1)
 
-    pred_classes = [class_names[idx] for idx in top_indices[0].cpu().numpy()]
+    pred_classes = [checkpoint['class_names'][idx] for idx in top_indices[0].cpu().numpy()]
     conf_percents = [prob * 100 for prob in top_probabilities[0].cpu().numpy()]
 
     return pred_classes, conf_percents
@@ -59,11 +48,11 @@ def predictFull(PIL_img: Image.Image, models_dirpath: str, _classes=None, _confs
     if _confs is None: _confs = []
     if _classes is None: _classes = []
 
-    main_model_path = os.path.join(models_dirpath, 'main.pt')
+    main_model_path = os.path.join(models_dirpath, 'main' + config['general']['model_type'] + '.pt')
     if not os.path.exists(main_model_path):
         raise FileNotFoundError(main_model_path + " does not exist!")
 
-    main_classes, main_confs = predictImage(PIL_img, main_model_path, top_n=top_n)
+    main_classes, main_confs = predictImage(PIL_img, main_model_path, top_n)
     _classes.append(main_classes)
     _confs.append(main_confs)
     main_class = main_classes[0]
@@ -71,10 +60,10 @@ def predictFull(PIL_img: Image.Image, models_dirpath: str, _classes=None, _confs
     sub_model_path = os.path.join(models_dirpath, main_class)
     if os.path.exists(sub_model_path):
         # if submodel has submodels
-        predictFull(PIL_img, sub_model_path, _classes, _confs, top_n=top_n)
-    elif os.path.exists(sub_model_path + '.pt'):
+        predictFull(PIL_img, sub_model_path, _classes, _confs, top_n)
+    elif os.path.exists(sub_model_path + config['general']['model_type'] + '.pt'):
         # if submodel has no submodels
-        sub_classes, sub_confs = predictImage(PIL_img, sub_model_path + '.pt', top_n=top_n)
+        sub_classes, sub_confs = predictImage(PIL_img, sub_model_path + config['general']['model_type'] + '.pt', top_n)
         _classes.append(sub_classes)
         _confs.append(sub_confs)
 
